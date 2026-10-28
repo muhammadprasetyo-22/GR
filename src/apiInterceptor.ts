@@ -35,6 +35,14 @@ function attachSafeJsonParser(res: Response, url: string): Response {
       if (parsed !== null) {
         return parsed;
       }
+      // If error response from server (e.g. 500, 502, 503, 504, 404), return error message
+      if (!res.ok) {
+        const cleanText = text && text.length < 150 ? text.trim() : '';
+        return {
+          error: cleanText || `Server merespon dengan status ${res.status} (${res.statusText || 'Error'}). Silakan periksa koneksi atau variabel Vercel.`,
+          status: res.status
+        };
+      }
       // Fallback to stale cache if available when rate limited or non-JSON returned
       const stale = cache.get(url);
       if (stale?.data) {

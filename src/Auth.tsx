@@ -92,23 +92,25 @@ export function Login({ onLogin, onNavRegister }: any) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
     try {
       const res = await apiFetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, rtId: currentRt })
       });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data?.user) {
         onLogin(data.user);
       } else {
-        setError(data.error);
+        setError(data?.error || 'Login gagal. Periksa kembali username dan password Anda.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Terjadi kesalahan jaringan.');
+      setError(err?.message || 'Terjadi kesalahan jaringan saat menghubungi server.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
