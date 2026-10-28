@@ -1,0 +1,180 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- REUSABLE GLOBAL HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? getUserData().role
+        : 'warga';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        getUserRole() in ['admin', 'developer'] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isBendahara() {
+      return isSignedIn() && (
+        getUserRole() in ['admin', 'bendahara', 'developer'] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isPengurus() {
+      return isSignedIn() && (
+        getUserRole() in ['admin', 'sekretaris', 'bendahara', 'pengurus', 'developer'] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Default catch-all: Deny all unhandled operations
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- USERS COLLECTION (Role & PII Protection) ---
+    // Sensitive data (NIK, phone, documents, full details) can only be accessed by the user themself or an admin.
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      
+      allow create: if isSignedIn() && request.auth.uid == userId && (
+        !incoming().keys().hasAny(['role', 'isApproved']) ||
+        incoming().role == 'warga' ||
+        isAdmin()
+      );
+      
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          request.auth.uid == userId &&
+          !incoming().diff(existing()).affectedKeys().hasAny(['role', 'isApproved'])
+        )
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // --- KAS COLLECTION (Financial Management - Bendahara / Admin Only Writes) ---
+    match /kas/{docId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isBendahara();
+    }
+
+    // --- IURAN COLLECTION (Financial Management & Payment Submissions) ---
+    match /iuran/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        isBendahara() || (
+          incoming().userId == request.auth.uid &&
+          incoming().status in ['verifikasi', 'butuh_konfirmasi']
+        )
+      );
+      allow update: if isBendahara();
+      allow delete: if isBendahara();
+    }
+
+    // --- SURAT COLLECTION (Surat Pengantar & Approvals - Pengurus / Admin Only Approvals) ---
+    match /surat/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isPengurus()
+      );
+      allow create: if isSignedIn() && (
+        incoming().userId == request.auth.uid ||
+        isPengurus()
+      );
+      allow update: if isPengurus();
+      allow delete: if isPengurus();
+    }
+
+    // --- LAPORAN CITIZEN REPORTS ---
+    match /laporan/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isPengurus() || (
+        resource.data.userId == request.auth.uid &&
+        !incoming().diff(existing()).affectedKeys().hasAny(['status'])
+      );
+    }
+
+    // --- ACARA / EVENTS ---
+    match /acara/{docId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isPengurus();
+    }
+
+    // --- UMKM ---
+    match /umkm/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isPengurus() || resource.data.ownerId == request.auth.uid;
+      allow delete: if isPengurus() || resource.data.ownerId == request.auth.uid;
+    }
+
+    // --- VOTING ---
+    match /voting/{docId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isPengurus();
+      allow update: if isSignedIn(); // Allow warga to cast vote in subfields / array
+    }
+
+    // --- NOTIFICATIONS ---
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isPengurus();
+    }
+
+    // --- KONTAK DARURAT ---
+    match /darurat/{docId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isPengurus();
+    }
+
+    // --- MEDIA ---
+    match /media/{docId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isPengurus();
+    }
+
+    // --- DOKUMEN WARGA ---
+    match /dokumen/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isPengurus()
+      );
+      allow create, update: if isSignedIn() && (
+        incoming().userId == request.auth.uid ||
+        isPengurus()
+      );
+      allow delete: if isPengurus() || resource.data.userId == request.auth.uid;
+    }
+
+    // --- ADMINS COLLECTION ---
+    match /admins/{docId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

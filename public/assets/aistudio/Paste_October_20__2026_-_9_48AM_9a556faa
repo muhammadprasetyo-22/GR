@@ -1,0 +1,138 @@
+Bertindaklah sebagai Senior Full-Stack Engineer, Database Architect, Application Security Engineer, dan SaaS Platform Engineer. Kerjakan langsung pada source code proyek Guyub Rukun yang sedang terbuka. Jangan hanya memberikan analisis atau contoh potongan kode: audit, implementasikan, uji, lalu dokumentasikan perubahan di seluruh file yang diperlukan.
+
+KONTEKS PROYEK
+- Aplikasi: Guyub Rukun / Smart RW, React + TypeScript + Vite + Express + Node.js + Mongoose, dipakai sebagai website dan PWA, serta dideploy menggunakan konfigurasi yang mendukung Vercel/serverless.
+- Database target: MongoDB dengan database bernama `guyubrukun` (MongoDB Atlas untuk production).
+- Aplikasi sudah memiliki sebagian integrasi Mongoose, model seperti User, Tenant, SystemData (data legacy), Iuran, Kas, Voting, Acara, Laporan, Surat, Umkm, Tamu, Media, Darurat, AuditLog, Notification, Dokumen, Inventaris, Notulen, MenuAccess, dan endpoint API. Jangan membuat sistem kedua yang duplikatif; rapikan dan tuntaskan arsitektur yang sudah ada.
+- File yang wajib diperiksa secara khusus: `server.ts`, `src/db/db.ts`, `src/Auth.tsx`, `src/App.tsx`, `src/apiInterceptor.ts`, semua komponen `src/Mobile*.tsx`, `src/components/*`, `src/types/*`, `api/*`, `package.json`, `.env.example`, `vercel.json`, migrasi yang sudah ada, dan seluruh endpoint `/api/*`.
+- Pertahankan fitur yang telah digunakan: autentikasi dan persetujuan warga, Data Warga dan anggota keluarga, dokumen KK/KTP, Surat Online, Iuran, Kas, Laporan, Acara, Voting, Pengumuman/Notifikasi, Media, UMKM, Tamu, Darurat, Inventaris, Notulen, Scan QR, menu/permission, dashboard, AI, backup/restore, status online, panel Developer, pengelolaan RT, dan fungsi PWA/mobile. Jangan menghilangkan fitur atau mengubah desain secara besar-besaran tanpa kebutuhan teknis yang jelas.
+
+TUJUAN AKHIR
+1. Semua data bisnis aplikasi dan data autentikasi yang menjadi sumber kebenaran harus dibaca/ditulis melalui backend ke MongoDB database `guyubrukun`.
+2. Login, registrasi, pemulihan/pergantian password, persetujuan akun, role, sesi, tenant, dan langganan harus dikelola backend dan tersimpan secara aman di MongoDB.
+3. Tidak ada pengguna/tenant yang dapat membaca atau memodifikasi data milik RT/tenant lain dengan memanipulasi `rtId`, URL, request body, header, cache, atau ID record.
+4. Jadikan Guyub Rukun sebagai SaaS multi-tenant yang dapat digunakan banyak RT/RW/komunitas, memiliki onboarding tenant, paket, masa percobaan/langganan, status pembayaran, batas fitur sesuai paket, dan panel super-admin.
+5. Semua migrasi harus aman, dapat diulang, tervalidasi, memiliki backup dan rencana rollback. Jangan sampai data lama terhapus atau akun warga kehilangan akses tanpa mekanisme yang jelas.
+
+TAHAP 1 — AUDIT SUMBER DATA DAN INVENTARIS FITUR
+- Telusuri seluruh repository untuk menemukan sumber data aktif dan lama: MongoDB/Mongoose, koleksi `SystemData`, data legacy, file JSON, Firebase/Firestore jika memang digunakan, `localStorage`, `sessionStorage`, cache di memori frontend, data demo/seed, dan request API.
+- Bedakan data bisnis yang wajib tersimpan permanen di MongoDB dari preferensi UI yang boleh tetap lokal. Data warga, akun/login, anggota keluarga, iuran, transaksi kas, surat, dokumen, laporan, agenda, voting, notifikasi, UMKM, inventaris, tenant, pengguna, audit, konfigurasi hak akses, langganan, invoice, dan pembayaran tidak boleh bergantung pada `localStorage` sebagai database utama.
+- Preferensi pribadi non-sensitif seperti tema, menu sidebar, kota jadwal salat, atau pengaturan tampilan boleh berada di browser. Data operasional seperti pesanan layanan warga/pengingat yang harus lintas perangkat atau dilihat pengurus harus dipindahkan ke API dan MongoDB sesuai aturan privasi.
+- Cari seluruh data palsu/default yang di-seed pada startup dan seluruh endpoint publik. Catat sumber setiap kumpulan data, model/collection tujuan, jumlah record, risiko duplikasi, field PII, serta kompatibilitas frontend.
+- Jangan menghapus dependensi/config/data legacy sebelum terbukti tidak lagi dibutuhkan dan migrasi terverifikasi. Jika Firebase benar-benar merupakan sumber data lama, buat migrator terpisah yang membaca sumber menggunakan kredensial server aman; jangan akses Firebase Admin dari frontend.
+
+TAHAP 2 — ARSITEKTUR MONGODB DATABASE `guyubrukun`
+- Semua environment production wajib memiliki `MONGODB_URI` yang valid menuju database `guyubrukun`. Bila URI tanpa nama database, gunakan `MONGODB_DB_NAME=guyubrukun` secara eksplisit dan validasi bahwa aplikasi tersambung ke database yang benar.
+- Hapus fallback production ke `mongodb://127.0.0.1:27017/guyubrukun`; aplikasi production harus gagal start/health-check dengan error terkontrol apabila env database tidak ada atau koneksi gagal, bukan berjalan seolah-olah memakai database lokal.
+- Rapikan satu modul koneksi Mongoose dengan connection caching yang sesuai Vercel/serverless; hindari membuat koneksi baru setiap request, index creation blocking saat production, log yang membocorkan URI, atau proses startup berulang yang membuat seed data.
+- Pastikan semua operasi data mengakses model MongoDB. Jangan gunakan array in-memory sebagai sumber kebenaran lintas pengguna/serverless. Proses sementara seperti presence/online harus didesain tahan serverless atau didokumentasikan sebagai fitur real-time yang memerlukan penyimpanan bersama.
+- Buat/rapikan model dan indexes untuk seluruh modul aplikasi. Pastikan setiap dokumen bisnis mempunyai `tenantId` yang tidak dapat ditentukan bebas oleh browser. Untuk migrasi kompatibel, boleh mempertahankan `rtId` sebagai kode/alias legacy, tetapi petakan ke tenant yang valid dan gunakan `tenantId` sebagai scope canonical setelah migrasi. Semua unique index tenant-aware, misalnya username per tenant dan NIK per tenant.
+- Sebelum menambahkan unique index, deteksi dan laporkan duplikat yang sudah ada. Jangan menghapus record otomatis untuk mengatasi konflik; buat laporan konflik untuk ditinjau.
+- Batasi projection dan schema output agar `passwordHash`, token, dokumen identitas, dan data sensitif tidak pernah terkirim dalam response umum. Jangan menyimpan dokumen foto/scan besar sebagai base64 tanpa batas di document warga; simpan metadata dan gunakan object storage privat jika ukuran/arsitektur membutuhkannya, dengan URL signed/akses terotorisasi. Catatan metadata dan relasinya tetap di MongoDB.
+
+TAHAP 3 — MIGRASI DATA LAMA TANPA KEHILANGAN DATA
+- Buat script migrasi TypeScript yang terpisah, misalnya `scripts/migrate-to-mongodb.ts`, serta script verifikasi dan backup. Sediakan mode `--dry-run` (default tidak mengubah data) dan mode commit yang eksplisit.
+- Migrasi harus idempotent: aman dijalankan berulang tanpa menduplikasi record. Gunakan ID sumber yang stabil, pemetaan `tenantId`/`rtId`, normalisasi field, validasi referensi, batch processing, laporan kegagalan per record, dan mekanisme melanjutkan setelah error.
+- Migrasikan data dari `SystemData` atau struktur legacy ke collection granular yang sesuai jika record sumber memang ada. Audit dan migrasikan sumber data lain yang teridentifikasi pada Tahap 1. Jangan mengasumsikan semua data berada di satu koleksi.
+- Untuk data akun yang password-nya masih plaintext pada database lama, lakukan migrasi aman ke hash password sebelum/ketika akun pertama kali login secara terkendali; setelah migrasi, hentikan dukungan login plaintext. Tandai akun dengan password default/lemah untuk wajib mengganti password. Jangan menulis password asli ke log atau file laporan.
+- Buat backup sebelum migrasi, simpan di lokasi privat, jangan commit backup ke Git, dan jangan menaruh data warga di log. Laporan migrasi mencakup jumlah sumber/tujuan, jumlah sukses/gagal/duplikat, field yang tidak valid, serta hasil verifikasi agregat/checksum yang tidak mengekspos PII.
+- Terapkan urutan: backup → dry-run → tinjau laporan → commit → verifikasi hitungan dan sampel → tes login → tes setiap modul → arsipkan data lama read-only untuk periode rollback. Jangan drop/delete source collection sampai validasi berhasil dan tindakan itu secara eksplisit dijalankan oleh operator.
+- Berikan panduan env dan perintah migrasi yang jelas. Jangan mengklaim migrasi production sudah selesai sebelum script benar-benar dijalankan dengan kredensial database yang valid.
+
+TAHAP 4 — PERBAIKAN AUTHENTICATION DAN SESSION
+Perbaiki semua masalah autentikasi secara menyeluruh, bukan hanya halaman login.
+- Hapus `JWT_SECRET` hardcoded/fallback dari `server.ts`; di production secret wajib berasal dari environment yang kuat dan tervalidasi. Tolak startup bila secret/session config tidak ada. Jangan pernah menyimpan secret dalam repository, contoh env, response, atau log.
+- Hapus semua akun default dan password tetap yang ditanam dalam kode/startup, termasuk akun admin RT dan developer. Jangan auto-seed akun dengan password publik. Buat bootstrap super-admin lewat command/CLI satu kali dengan environment/secret sementara, password kuat, audit log, dan mekanisme menonaktifkan bootstrap setelah dipakai. Registrasi biasa tidak boleh menetapkan role `admin` atau `developer`.
+- Perbaiki `verifyPassword`: jangan pernah menerima plaintext sebagai fallback dan jangan mengubah huruf besar-kecil, menghapus tanda baca/spasi, atau mencoba variasi password saat login. Password harus diverifikasi persis dengan hash. Gunakan hashing password async yang aman (Argon2id atau bcrypt cost yang memadai), jangan menggunakan fungsi sync pada request.
+- Terapkan aturan password yang kuat dan wajar, rate limit, proteksi brute-force, respons login generik, dan throttling/penundaan progresif per kombinasi IP serta identitas akun. Jangan menggunakan rate limit global yang sangat longgar. Jangan membuat mekanisme “user sedang aktif di perangkat lain” sebagai satu-satunya proteksi login.
+- Gunakan sesi server-side yang tersimpan di MongoDB (collection Session) atau desain setara yang memiliki revoke/expiry. Utamakan cookie sesi `HttpOnly`, `Secure` di production, `SameSite=Lax` atau lebih ketat, `Path=/`, tanpa `Domain` kecuali benar-benar diperlukan. Rotasi sesi saat login dan perubahan privilege/password; logout mencabut sesi di server. Atur masa berlaku sesi, expiry index TTL, invalidasi semua sesi saat password diubah, dan tampilkan pesan sesi berakhir yang wajar.
+- Jangan simpan bearer token/refresh token di `localStorage` atau `sessionStorage`. Hapus pemakaian token auth dari query URL, `x-auth-token`, dan query `?token=`. Jangan mengirim token di URL SSE karena dapat masuk ke log/history. Untuk `/api/stream`, gunakan cookie sesi yang sama-origin atau mekanisme tiket sekali pakai berumur sangat pendek; jangan memakai token sesi jangka panjang di URL.
+- Perbarui `src/apiInterceptor.ts`, `src/App.tsx`, `src/Auth.tsx`, dan pemanggil API supaya sesi cookie dikirim secara benar (`credentials: 'same-origin'` atau sesuai domain), status 401 ditangani dengan aman, dan tidak membaca token lama dari localStorage. Buat transisi/logout yang membersihkan key auth lama dan cache.
+- Cegah CSRF dengan SameSite cookie ditambah validasi `Origin`/`Referer` untuk request mutasi dan/atau CSRF token bila diperlukan. Pastikan CORS hanya mengizinkan origin resmi, bukan `*` ketika memakai credentials.
+- Password wajib minimal kuat (misalnya minimal 10–12 karakter), hindari password dari username/nomor rumah/NIK/tanggal lahir, jangan paksa seluruh data warga lama kehilangan akses mendadak. Sediakan flow `mustChangePassword` untuk akun lama/default/lemah, dan flow reset yang menggunakan token acak, hash token di database, expiry singkat, dan sekali pakai. Jangan mengirim password melalui pesan/log.
+- Pada registrasi publik, abaikan/hapus properti privilege yang dikirim klien: `role`, `isApproved`, `isVip`, status langganan, tenantId, dll. Backend menetapkan role `warga` dan status belum disetujui secara default. Hanya endpoint admin terotorisasi yang boleh mengubah role/persetujuan.
+- Pastikan response login mengembalikan hanya profil aman (id, nama, username, role, tenant ringkas, status yang dibutuhkan), tanpa hash password, dokumen KK/KTP, token internal, atau data sensitif yang tidak perlu.
+- Selesaikan logout dan “who am I” (`/api/me`) berdasarkan sesi yang diverifikasi database, bukan ID/role yang dikirim browser. Jangan percaya `x-user-id`, `x-user-role`, `x-user-nama`, atau header sejenis dari client.
+
+TAHAP 5 — ISOLASI TENANT YANG WAJIB DI BACKEND
+- Jadikan tenant scope diperoleh dari sesi terverifikasi di server dan user record dari MongoDB, bukan dari `x-rt-id`, query, body, `localStorage`, atau ID tenant pilihan browser.
+- Hapus fallback `rt01` untuk konteks request yang tidak valid/tidak terautentikasi. Endpoint privat harus gagal secara default (401/403); jangan memilih tenant secara diam-diam.
+- Buat middleware/service terpusat untuk memvalidasi tenant, role, dan subscription. Semua query read/update/delete wajib menyertakan tenant scope pada query MongoDB itu sendiri, contoh `{ tenantId: session.tenantId, id: recordId }`; jangan hanya memeriksa scope terpisah lalu melakukan query global.
+- Terapkan tenant isolation ke semua model dan semua route: `/api/warga`, `/api/data/:resource`, surat, kas, iuran, inventaris, dokumen, notifikasi, backup/restore, audit logs, voting, UMKM, dashboard, upload, serta route baru. Audit juga aggregate pipeline, `findById`, `updateOne`, `deleteMany`, dan operasi massal karena sering menjadi celah lintas tenant.
+- Tenant admin hanya dapat mengatur tenant sendiri. Super-admin platform adalah role terpisah dan hanya diberikan melalui bootstrap yang aman; setiap akses lintas tenant harus eksplisit, punya permission khusus, dan tercatat dalam audit log. Jangan izinkan role developer dari registrasi publik atau dari request body.
+- Endpoint publik harus menjadi allowlist yang ditinjau satu per satu. Dashboard public hanya boleh mengirim ringkasan publik yang sudah disanitasi dan tidak menampilkan data pribadi/keuangan/rumah tangga. Endpoint yang membaca data berdasarkan `rtId` tidak boleh dianggap public hanya karena namanya summary/dashboard.
+- Terapkan subscription guard pada semua endpoint berbayar, tetapi buat pengecualian yang jelas untuk health check, pembayaran, pengaturan billing, dan ekspor data sesuai kebijakan. Jika database subscription gagal dibaca, jangan diam-diam `next()` untuk memberi akses; fail-closed dengan respons 503/403 yang terkontrol. Berikan akses baca/ekspor terbatas saat langganan expired bila memang kebijakan produk menghendakinya.
+- Buat tes keamanan tenant: user RT A tidak dapat membaca/mengubah record RT B meskipun memalsukan header, query, body, ID, atau parameter; user biasa tidak dapat memakai endpoint developer/admin; dan semua jalur API punya hasil yang konsisten.
+
+TAHAP 6 — SECURITY HARDENING API DAN DATA
+- Gunakan Helmet dan konfigurasi Content Security Policy yang cocok dengan frontend/PWA yang benar-benar digunakan; batasi CORS ke origin resmi. Validasi `trust proxy` sesuai platform deployment, jangan memercayai header IP forwarded dari sumber sembarang.
+- Turunkan JSON body limit ke ukuran normal untuk request umum. Upload dokumen/foto memakai endpoint terpisah dengan batas ukuran, MIME dan magic-byte validation, nama file aman, penyimpanan privat, dan otorisasi akses. Jangan menerima base64 besar tanpa batas.
+- Terapkan Zod validation untuk semua body/query/params penting, normalisasi input, whitelist field yang bisa diubah, dan `strict` schema untuk field kritis. Cegah mass assignment: jangan menyimpan langsung `{...req.body}` untuk update data sensitif.
+- Tambahkan rate limit khusus login, register, reset password, upload, AI, backup/restore, dan endpoint mahal. Atur limit umum yang masuk akal; bukan `max: 100000`.
+- Jangan menampilkan stack trace, detail MongoDB, env, query, atau informasi internal pada respons error production. Log error secara terstruktur dengan request ID. Jangan log password/token/cookie/NIK/dokumen identitas.
+- Audit semua endpoint `backup/export` dan `backup/restore`: izin admin tenant, scope tenant, validasi ukuran/schema, anti-injection, konfirmasi/operasi yang aman, audit log redacted, dan tidak boleh menimpa data tenant lain. Jangan export password hash, token, atau secret bila tidak diperlukan.
+- Audit file `src/apiInterceptor.ts`: hentikan cache client untuk response auth/sensitif; jangan menyajikan stale cache sebagai response sukses seolah-olah data server terbaru ketika status API gagal. Cache key tidak boleh memungkinkan data pengguna/tenant berbeda tercampur. Bersihkan cache pada login, logout, pergantian akun/tenant, dan mutation.
+- Tetapkan `Cache-Control: no-store` untuk respons autentikasi dan data sensitif. Lindungi dokumen pribadi agar hanya pemilik/warga terkait dan role yang secara eksplisit berwenang yang dapat melihatnya.
+- Audit `firestore.rules`/konfigurasi Firebase dan dependency Firebase. Tutup akses database lama jika memang sudah tidak dipakai, tetapi hanya setelah sumber data lama dipastikan tidak dibutuhkan dan migrasi selesai. Jangan memublikasikan kredensial layanan.
+- Tambahkan audit log untuk login gagal/berhasil, perubahan role, persetujuan warga, perubahan data sensitif, lintas-tenant oleh super-admin, pembaruan paket/langganan/pembayaran, backup/restore, dan perubahan konfigurasi. Redaksi data sensitif pada `before`/`after`.
+
+TAHAP 7 — BANGUN FONDASI SAAS MULTI-TENANT
+Buat sistem SaaS yang benar-benar dapat dikelola, bukan hanya field `isVip`.
+- Model Tenant/Organization: id immutable, kode/slug, nama komunitas/RT/RW, alamat dan zona waktu, kontak pengelola, status onboarding, paket, batas pengguna/penyimpanan/fitur, createdAt, status tenant.
+- Model membership/role yang jelas: super-admin platform, tenant admin/ketua RT, sekretaris, bendahara, pengurus, warga. Tenant admin tidak bisa melihat statistik/data tenant lain. Pertahankan kompatibilitas role lama melalui migration map.
+- Model Plan/Feature Entitlement dengan kode paket dan konfigurasi yang bisa diatur admin: harga IDR, durasi, trial, batas warga/pengurus/penyimpanan, fitur aktif, batas penggunaan AI, batas file, dan dukungan. Jangan menulis harga/langganan di banyak tempat dalam kode.
+- Model Subscription dengan status konsisten, misalnya `trialing`, `active`, `past_due`, `expired`, `canceled`, `suspended`, tanggal mulai/akhir, grace period, auto-renewal bila didukung, dan histori perubahan. Migrasikan `Free`/`VIP`/`isVip`/`statusLangganan`/`expiredAt` lama ke skema baru dengan pemetaan yang terdokumentasi agar tenant saat ini tidak tiba-tiba terblokir.
+- Alur onboarding: tenant baru membuat workspace dan akun tenant admin; tenant baru tidak memperoleh super-admin. Buat verifikasi kontak sesuai kemampuan yang tersedia, persetujuan/aktivasi, pemilihan paket, trial, dan halaman status langganan.
+- Dashboard super-admin: daftar tenant, pencarian/filter status, jumlah pengguna, paket, tanggal kedaluwarsa, aktivitas, suspend/activate, ubah paket, histori invoice/pembayaran, dan audit. Tambahkan konfirmasi pada aksi destruktif.
+- Dashboard tenant admin: ringkasan paket, pemakaian kuota, masa aktif, invoice/pembayaran, upgrade/perpanjang, dan status fitur. Warga tidak boleh mendapat akses pengaturan billing kecuali kebijakan khusus.
+- Siapkan billing provider abstraction yang dapat diintegrasikan dengan payment gateway Indonesia (misalnya Midtrans/Xendit) melalui env. Jangan membuat pembayaran fiktif atau menandai invoice paid hanya karena frontend mengirim status. Jika kredensial gateway belum tersedia, sediakan mode manual transfer/invoice “menunggu verifikasi” yang hanya dapat disahkan role berizin, dan dokumentasikan langkah setup provider.
+- Webhook pembayaran wajib memverifikasi signature dari provider, nominal dan currency, referensi invoice, idempotency, serta tidak boleh percaya status dari client. Catat setiap event yang diproses untuk mencegah pembayaran ganda.
+- Buat pemrosesan masa trial/kedaluwarsa yang andal. Scheduler serverless tidak boleh diasumsikan berjalan terus-menerus; gunakan pemeriksaan masa aktif saat request dan cron/scheduler deployment hanya sebagai tambahan. Jangan pernah menonaktifkan tenant aktif karena kegagalan koneksi sesaat.
+- Fitur yang tidak termasuk paket harus dicek di backend middleware/service, bukan hanya disembunyikan di UI. Saat kedaluwarsa, tampilkan CTA perpanjangan dan aturan pembatasan yang konsisten; jangan menghapus data tenant.
+
+TAHAP 8 — MIGRASI FRONTEND DAN KOMPATIBILITAS
+- Pertahankan tampilan, responsivitas, navigasi desktop/mobile, PWA, manifest, service worker, dan semua fitur. Fokus refactor pada data layer/API/authentication; jangan mengganti aplikasi dengan template baru.
+- Buat API client yang seragam untuk credentials, error handling, request ID, timeout/retry, dan invalidasi cache. Jangan melakukan retry otomatis untuk POST/PUT/DELETE kecuali operasi mempunyai idempotency key yang tepat.
+- Hapus token dari `localStorage` (`auth_token`, `token`, token dalam `auth_user`) setelah sesi cookie berjalan. Hapus header identitas/role yang tidak dipercaya. Simpan hanya data profil minimal yang tidak sensitif bila benar-benar dibutuhkan untuk render, dan validasi ulang sesi dengan `/api/me` saat aplikasi dibuka.
+- Pastikan EventSource/SSE bekerja tanpa token query URL. Pastikan logout membersihkan state, cache, dan UI; sesi lama langsung dicabut oleh server.
+- Untuk registrasi warga, pertahankan pemilihan RT/validasi nomor rumah yang sudah ada tetapi jangan menjadikan pilihan RT di browser sebagai otorisasi. Server memvalidasi tenant yang dipilih dan alamatnya, menetapkan tenantId, role `warga`, serta persetujuan default.
+- Hentikan client-side fallback yang menampilkan data contoh/empty data sebagai keberhasilan ketika API gagal. Tampilkan error dan tombol coba lagi yang jelas agar pengguna tidak salah memahami data kas/iuran sebagai kosong.
+- Seluruh modul harus mengambil data canonical dari backend MongoDB. Offline/PWA hanya boleh menggunakan cache untuk kebutuhan UX yang terukur dan tidak boleh membuat perubahan bisnis dianggap tersimpan sebelum sinkronisasi server berhasil.
+
+TAHAP 9 — TEST OTOMATIS DAN KRITERIA KEBERHASILAN
+Tambahkan tes yang bisa dijalankan dari repository untuk sekurang-kurangnya:
+1. Build frontend dan pemeriksaan TypeScript/lint lulus.
+2. MongoDB env tidak valid/missing di production menyebabkan startup/API gagal dengan aman; koneksi yang valid menuju database `guyubrukun` berhasil.
+3. Login dengan password benar berhasil; password salah gagal; password plaintext tidak lagi diterima setelah migrasi; password/secret tidak muncul di response.
+4. Role/approval dari body registrasi diabaikan; registrasi publik tidak dapat menciptakan admin/developer.
+5. Logout mencabut sesi; sesi expired/revoked ditolak; perubahan password mencabut sesi lain.
+6. Tenant isolation menghalangi akses lintas tenant pada GET/POST/PUT/DELETE, agregasi, dokumen, dashboard, notification, backup/restore, dan pencarian.
+7. Manipulasi `x-rt-id`, `tenantId`, `rtId`, `x-user-role`, query token, atau record ID tidak dapat melewati authorization.
+8. Rate limit login aktif dan tidak terlalu longgar; endpoint sensitif tidak dapat diakses tanpa sesi.
+9. Subscription guard menolak tenant expired/suspended dengan benar dan tidak fail-open saat query gagal.
+10. Script migration dry-run tidak mengubah data; commit idempotent; jumlah record dan relasi diverifikasi; rollback/backup tersedia.
+11. Setiap modul utama CRUD dan fungsi yang sudah ada tetap berfungsi sesudah perubahan.
+12. Periksa tidak ada secret, password default, akses `verifyPassword` plaintext, token localStorage, token auth query URL, atau fallback database production di source code.
+- Gunakan unit/integration test realistis. Jika test membutuhkan database, gunakan MongoDB test container/memory server yang kompatibel atau database test khusus; jangan arahkan tes destruktif ke database production.
+- Jalankan `npm run lint` dan `npm run build`, perbaiki error yang muncul. Jika test tidak dapat dijalankan karena credential eksternal belum tersedia, dokumentasikan secara jujur dan sediakan langkah verifikasi manual; jangan mengklaim lulus bila belum dijalankan.
+
+TAHAP 10 — DOKUMENTASI DAN OUTPUT AKHIR
+Perbarui `README.md` dan `.env.example` dengan dokumentasi yang tidak mengandung secret nyata:
+- daftar environment wajib: `MONGODB_URI`, `MONGODB_DB_NAME=guyubrukun`, session/auth secrets jika masih diperlukan, `APP_URL`, allowed origin, upload storage config, dan payment gateway env opsional;
+- cara setup lokal dan production/Vercel;
+- cara bootstrap super-admin dengan aman dan sekali pakai;
+- cara membuat backup, dry-run migrasi, menjalankan commit migrasi, memverifikasi hasil, dan rollback;
+- cara mengonfigurasi paket/trial/langganan dan payment gateway/manual invoice;
+- daftar endpoint auth/billing penting dan aturan role;
+- status bagian yang benar-benar selesai, yang perlu credential eksternal, dan risiko tersisa.
+
+ATURAN KERJA
+- Mulai dengan audit struktur kode dan alur data; kemudian implementasikan secara bertahap, dari fondasi database/auth/tenant sebelum UI billing.
+- Jangan menghapus data, file, endpoint, atau fitur untuk membuat build cepat lulus.
+- Jangan membuat fake-success, mock database production, password admin default, atau menutupi kegagalan API sebagai data kosong.
+- Jangan pernah mengklaim tersambung ke MongoDB Atlas, telah memindahkan seluruh data production, atau telah menguji payment gateway jika kredensial/eksekusi riil belum tersedia.
+- Jangan hanya menambahkan middleware baru tetapi membiarkan route lama lolos. Telusuri dan refactor seluruh endpoint yang relevan.
+- Bila perubahan besar, kerjakan dalam tahap yang aman dan pertahankan kompatibilitas data lama. Sebelum operasi destruktif, buat backup dan minta persetujuan operator lewat command/flag yang jelas.
+- Pada akhir pekerjaan, berikan ringkasan file yang diubah, risiko keamanan yang diperbaiki, skema koleksi, hasil build/test aktual, perintah migrasi, env yang harus diisi, serta langkah yang masih perlu dilakukan oleh pemilik aplikasi.
+
+Definisi selesai: seluruh data bisnis memiliki sumber kebenaran di MongoDB `guyubrukun`, login dan sesi aman berbasis MongoDB, tidak ada rahasia/default credential di source code, isolasi tenant ditegakkan pada setiap route dan query, alur SaaS berfungsi tanpa mengganggu tenant lama, semua fitur utama tetap berjalan, serta migrasi dan hasil pengujian terdokumentasi.
