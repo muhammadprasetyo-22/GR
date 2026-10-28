@@ -97,7 +97,7 @@ export function Login({ onLogin, onNavRegister }: any) {
       const res = await apiFetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, rtId: currentRt })
       });
       const data = await res.json();
       if (res.ok) {

@@ -6,11 +6,6 @@ dotenv.config();
 const rawMongoUri = process.env.MONGODB_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'guyubrukun';
 
-// In production, reject unconfigured database to fail-fast with clear error
-if (process.env.NODE_ENV === 'production' && !rawMongoUri) {
-  throw new Error('[MongoDB Config Fatal] MONGODB_URI is required in production environment pointing to guyubrukun database.');
-}
-
 const MONGODB_URI = rawMongoUri || 'mongodb://127.0.0.1:27017/guyubrukun';
 
 /**
