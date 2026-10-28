@@ -91,26 +91,9 @@ app.use(cookieParser());
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ limit: "15mb", extended: true }));
 
-// Vercel Serverless rewrite support: map /api?__route=..., [...slug], or x-matched-path back to /api/...
+// Safe passive URL normalization for legacy queries without mutating req.url unnecessarily
 app.use((req, res, next) => {
-  const matchedPath = (req.headers['x-matched-path'] || req.headers['x-vercel-matched-path']) as string | undefined;
-
-  if (req.query && req.query.__route) {
-    const subRoute = String(req.query.__route).replace(/^\/+/, '');
-    const searchIndex = req.url.indexOf('?');
-    const queryString = searchIndex !== -1 ? req.url.substring(searchIndex) : '';
-    req.url = `/api/${subRoute}${queryString}`;
-  } else if (req.query && req.query.slug) {
-    const slugStr = Array.isArray(req.query.slug) ? req.query.slug.join('/') : String(req.query.slug);
-    const cleanSlug = slugStr.replace(/^\/+/, '');
-    const searchIndex = req.url.indexOf('?');
-    const queryString = searchIndex !== -1 ? req.url.substring(searchIndex) : '';
-    req.url = `/api/${cleanSlug}${queryString}`;
-  } else if (matchedPath && matchedPath.startsWith('/api/') && (!req.url || req.url === '/' || req.url === '/api' || req.url.startsWith('/api?'))) {
-    const searchIndex = req.url.indexOf('?');
-    const queryString = searchIndex !== -1 ? req.url.substring(searchIndex) : '';
-    req.url = `${matchedPath}${queryString}`;
-  } else if ((process.env.VERCEL || process.env.NOW_REGION) && req.url && !req.url.startsWith('/api/') && !req.url.startsWith('/api?')) {
+  if (req.url && !req.url.startsWith('/api')) {
     const cleanPath = req.url.startsWith('/') ? req.url : `/${req.url}`;
     req.url = `/api${cleanPath}`;
   }
@@ -119,7 +102,7 @@ app.use((req, res, next) => {
 
 // Global DB connection middleware for APIs to ensure stable connection on serverless/cold-start
 app.use(async (req, res, next) => {
-  if (req.path.startsWith("/api/") || req.url.startsWith("/api/")) {
+  if (req.path.startsWith("/api") || req.url.startsWith("/api")) {
     try {
       await connectDB();
     } catch (err: any) {
@@ -6426,27 +6409,31 @@ app.get(["/api/public/beranda-summary", "/api/dashboard/summary"], async (req, r
 });
 
 // Status checking API
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", mode: "modular-tables", isDbConnected });
+app.get(["/api/health", "/api", "/api/"], (req, res) => {
+  res.json({ status: "ok", mode: "modular-tables", isDbConnected, app: "Guyub Rukun API" });
+});
+
+// Catch-all 404 handler for API routes to prevent falling through
+app.use(['/api/*', '/api'], (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (req.path.startsWith('/api') || req.url.startsWith('/api')) {
+    return res.status(404).json({ error: `API route ${req.originalUrl || req.url} not found` });
+  }
+  next();
+});
+
+// Global Error Handler for APIs
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (req.path?.startsWith('/api') || req.url?.startsWith('/api')) {
+    console.error("API Error:", err?.message || err);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: err?.message || "Internal Server Error" });
+    }
+  } else {
+    next(err);
+  }
 });
 
 export async function startServer(listen = true) {
-  // Global Error Handler for APIs
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.path.startsWith('/api/')) {
-      console.error("API Error:", err?.message || err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Internal Server Error" });
-      }
-    } else {
-      next(err);
-    }
-  });
-
-  // Catch-all 404 handler for API routes to prevent falling through to Vite/index.html
-  app.use('/api/*', (req: express.Request, res: express.Response) => {
-    res.status(404).json({ error: `API route ${req.originalUrl} not found` });
-  });
 
   const distPath = path.join(process.cwd(), 'dist');
   const distIndex = path.join(distPath, 'index.html');

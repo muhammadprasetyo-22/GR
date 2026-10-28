@@ -30,7 +30,7 @@
     },
     {
       "source": "/api/(.*)",
-      "destination": "/api?__route=$1"
+      "destination": "/api/index.ts"
     },
     {
       "source": "/((?!api/|assets/|.*\\.[a-zA-Z0-9]+$).*)",
