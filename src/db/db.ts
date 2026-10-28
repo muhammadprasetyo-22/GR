@@ -6,8 +6,9 @@ dotenv.config();
 const rawMongoUri = process.env.MONGODB_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'guyubrukun';
 
+// In production, reject unconfigured database to fail-fast with clear error
 if (process.env.NODE_ENV === 'production' && !rawMongoUri) {
-  console.warn('[MongoDB Notice] MONGODB_URI is not set in environment variables. Database operations in production require MONGODB_URI.');
+  throw new Error('[MongoDB Config Fatal] MONGODB_URI is required in production environment pointing to guyubrukun database.');
 }
 
 const MONGODB_URI = rawMongoUri || 'mongodb://127.0.0.1:27017/guyubrukun';
@@ -37,11 +38,6 @@ if (!global.mongooseCache) {
  * Optimized MongoDB Connection with Connection Caching for Vercel Serverless
  */
 export async function connectDB(): Promise<typeof mongoose> {
-  // If running in Vercel serverless without MONGODB_URI, fail with clear actionable error
-  if (!rawMongoUri && (process.env.VERCEL || process.env.NOW_REGION)) {
-    throw new Error('MONGODB_URI_MISSING: MONGODB_URI belum disetel di Vercel Environment Variables. Tambahkan MONGODB_URI di dashboard Vercel (Project Settings > Environment Variables).');
-  }
-
   // 1. If connection already active, reuse existing connection immediately
   if (cached.conn && mongoose.connection.readyState === 1) {
     return cached.conn;
