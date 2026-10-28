@@ -6431,27 +6431,28 @@ app.get(["/api/public/beranda-summary", "/api/dashboard/summary"], async (req, r
 });
 
 // Status checking API
-app.get("/api/health", (req, res) => {
+app.get(["/api/health", "/health"], (req, res) => {
   res.json({ status: "ok", mode: "modular-tables", isDbConnected });
 });
 
-export async function startServer(listen = true) {
-  // Global Error Handler for APIs
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.path.startsWith('/api/')) {
-      console.error("API Error:", err?.message || err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Internal Server Error" });
-      }
-    } else {
-      next(err);
+// Global Error Handler for APIs (Active both in Vercel Serverless & Local/Docker)
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (req.path.startsWith('/api/') || req.url.startsWith('/api/')) {
+    console.error("API Unhandled Error:", err?.message || err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err?.message || "Internal Server Error" });
     }
-  });
+  } else {
+    next(err);
+  }
+});
 
-  // Catch-all 404 handler for API routes to prevent falling through to Vite/index.html
-  app.use('/api/*', (req: express.Request, res: express.Response) => {
-    res.status(404).json({ error: `API route ${req.originalUrl} not found` });
-  });
+// Catch-all 404 handler for API routes to prevent falling through to HTML
+app.use(['/api/*', '/api'], (req: express.Request, res: express.Response) => {
+  res.status(404).json({ error: `API route ${req.originalUrl || req.url} not found` });
+});
+
+export async function startServer(listen = true) {
 
   const distPath = path.join(process.cwd(), 'dist');
   const distIndex = path.join(distPath, 'index.html');
