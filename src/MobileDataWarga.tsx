@@ -3641,9 +3641,9 @@ export const MobileDataWarga = ({ onBack, currentUser }: { onBack: () => void, c
               const canViewCitizenNoKk = isPrivilegedKkViewer || isCurrentUser;
 
               return (
-                <div key={`${warga.id || 'warga'}_${idx}`} className={`bg-white rounded-[1.5rem] border ${isCurrentUser ? 'border-teal-500 shadow-md ring-2 ring-teal-500/20' : isExpanded ? 'border-teal-400 shadow-xl ring-2 ring-teal-500/15' : 'border-slate-200/80 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.06)] hover:border-teal-300 hover:shadow-md'} overflow-hidden transition-all duration-300`}>
+                <div key={`${warga.id || 'warga'}_${idx}`} className={`bg-white rounded-2xl border ${isCurrentUser ? 'border-teal-500 shadow-md ring-2 ring-teal-500/15' : isExpanded ? 'border-teal-400 shadow-md' : 'border-slate-200/90 shadow-xs hover:border-slate-300'} overflow-hidden transition-all duration-200`}>
                   <div
-                    className="p-4 flex items-start sm:items-center gap-3.5 select-none cursor-pointer"
+                    className="p-4 select-none cursor-pointer"
                     onClick={() => {
                       if (canViewFamily) {
                         setExpandedId(isExpanded ? '__closed__' : warga.id);
@@ -3652,209 +3652,192 @@ export const MobileDataWarga = ({ onBack, currentUser }: { onBack: () => void, c
                       }
                     }}
                   >
-                    {/* Avatar / Foto Profil Warga (Klik untuk Pratinjau Foto) */}
-                    <div 
-                      className="relative shrink-0 mt-0.5 sm:mt-0 group/avatar cursor-pointer"
-                      title="Klik untuk melihat pratinjau foto profil"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPreviewPhotoWarga(warga);
-                      }}
-                    >
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white font-extrabold text-sm flex flex-col items-center justify-center shrink-0 overflow-hidden border border-slate-100 px-0.5 transition-transform group-hover/avatar:scale-105 shadow-xs">
-                        {warga.photo ? (
-                          <img
-                            src={warga.photo}
-                            alt={warga.nama}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : houseInfo.hasSpecific && houseInfo.shortCode.length > 1 ? (
-                          <>
-                            <span className="text-[8px] font-bold uppercase tracking-wider opacity-85 leading-none">BLOK</span>
-                            <span className="font-black text-xs leading-tight mt-0.5">{houseInfo.shortCode}</span>
-                          </>
-                        ) : (
-                          houseInfo.shortCode
-                        )}
-                      </div>
-
-                      <span className={`absolute bottom-[-2px] right-[-2px] w-3.5 h-3.5 ${warga.isOnline ? 'bg-emerald-500 ring-2 ring-white' : 'bg-slate-300'} rounded-full shadow-xs`}></span>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <h5 className="font-extrabold text-slate-800 text-sm leading-snug break-words">
-                          {warga.nama}
-                        </h5>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                          warga.role === 'admin'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : warga.role === 'pengurus'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : warga.role === 'bendahara'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : warga.role === 'sekretaris'
-                            ? 'bg-violet-50 text-violet-700 border-violet-200'
-                            : 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}>
-                          {warga.role === 'admin'
-                            ? 'Ketua RT / Admin'
-                            : warga.role === 'pengurus'
-                            ? 'Pengurus RT'
-                            : warga.role === 'bendahara'
-                            ? 'Bendahara'
-                            : warga.role === 'sekretaris'
-                            ? 'Sekretaris'
-                            : 'Warga'}
-                        </span>
-                        {isCurrentUser && (
-                          <span className="bg-gradient-to-r from-teal-700 to-emerald-700 text-white text-[9px] px-2.5 py-0.5 rounded-full uppercase font-black tracking-widest shrink-0 border border-teal-400 shadow-xs flex items-center gap-1">
-                            <span>★</span>
-                            <span>Akun Anda</span>
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                        <HouseBadge warga={warga} size="md" />
-                        {warga.username && (
-                          <span className="text-[11px] text-slate-400 font-semibold">@{warga.username}</span>
-                        )}
-                      </div>
-
-                      {/* Baris No. Kartu Keluarga (Hanya Terlihat oleh Ketua RT, Sekretaris, dan Akun Warga Terkait) */}
-                      {canViewCitizenNoKk && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          {citizenNoKk ? (
-                            <div className="inline-flex items-center gap-1.5 bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200/90 text-teal-950 px-2.5 py-1 rounded-xl shadow-2xs text-[11px] font-mono font-bold">
-                              <span className="text-teal-700 font-sans text-[10px] uppercase tracking-wider font-extrabold">📋 No. KK:</span>
-                              <span className="font-extrabold tracking-wider">{citizenNoKk}</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigator.clipboard.writeText(citizenNoKk);
-                                  showStatusBanner(`No. KK ${citizenNoKk} disalin!`);
-                                }}
-                                title="Salin No. KK"
-                                className="text-[9px] bg-white text-teal-700 border border-teal-200 hover:bg-teal-100 px-1.5 py-0.5 rounded-md font-sans font-extrabold cursor-pointer transition-colors ml-0.5"
-                              >
-                                Salin
-                              </button>
-                            </div>
-                          ) : hasKk ? (
-                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                              <span>📋 No. KK:</span>
-                              <span className="font-normal italic">Terunggah di KK</span>
-                            </span>
+                    {/* Top Row: Avatar + Citizen Name & Roles + House Badge */}
+                    <div className="flex items-start gap-3">
+                      {/* Avatar */}
+                      <div 
+                        className="relative shrink-0 cursor-pointer group/avatar"
+                        title="Klik untuk melihat pratinjau foto profil"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewPhotoWarga(warga);
+                        }}
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 font-black text-sm flex items-center justify-center overflow-hidden border border-slate-200 shrink-0">
+                          {warga.photo ? (
+                            <img
+                              src={warga.photo}
+                              alt={warga.nama}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : houseInfo.hasSpecific && houseInfo.shortCode.length > 1 ? (
+                            <span className="font-extrabold text-teal-700 text-xs">{houseInfo.shortCode}</span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 bg-slate-50 text-slate-400 border border-slate-200 px-2 py-0.5 rounded-lg text-[10px] font-medium">
-                              <span>📋 No. KK:</span>
-                              <span className="italic">Belum ada</span>
+                            houseInfo.shortCode
+                          )}
+                        </div>
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${warga.isOnline ? 'bg-emerald-500' : 'bg-slate-300'} rounded-full ring-2 ring-white`}></span>
+                      </div>
+
+                      {/* Citizen Name & Primary Badges */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <h5 className="font-extrabold text-slate-900 text-sm leading-snug truncate">
+                            {warga.nama}
+                          </h5>
+
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            warga.role === 'admin'
+                              ? 'bg-amber-100 text-amber-900'
+                              : warga.role === 'pengurus'
+                              ? 'bg-blue-100 text-blue-900'
+                              : warga.role === 'bendahara'
+                              ? 'bg-emerald-100 text-emerald-900'
+                              : warga.role === 'sekretaris'
+                              ? 'bg-violet-100 text-violet-900'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {warga.role === 'admin'
+                              ? 'Ketua RT / Admin'
+                              : warga.role === 'pengurus'
+                              ? 'Pengurus RT'
+                              : warga.role === 'bendahara'
+                              ? 'Bendahara'
+                              : warga.role === 'sekretaris'
+                              ? 'Sekretaris'
+                              : 'Warga'}
+                          </span>
+
+                          {isCurrentUser && (
+                            <span className="bg-teal-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
+                              ★ Akun Anda
                             </span>
                           )}
+                        </div>
+
+                        {/* House Address & Username */}
+                        <div className="flex items-center gap-2 mt-1 text-xs text-slate-600 font-medium">
+                          <span className="font-bold text-slate-800 flex items-center gap-1">
+                            <span>🏠</span>
+                            <span>{houseInfo.fullFormatted}</span>
+                          </span>
+                          {warga.username && (
+                            <span className="text-slate-400 font-mono text-[11px]">@{warga.username}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expand / Collapse Chevron */}
+                      {canViewFamily && (
+                        <div className={`p-1.5 rounded-lg transition-transform shrink-0 ${isExpanded ? 'bg-teal-50 text-teal-700 rotate-180' : 'text-slate-400'}`}>
+                          <icons.lainnya className="w-4 h-4" />
                         </div>
                       )}
+                    </div>
 
-                      <div className="flex items-center justify-between gap-2 mt-2">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[10px] bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
-                            {warga.rt || 'RT 01'}
-                          </span>
-                          <span className="inline-flex items-center bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-bold">
-                            👨‍👩‍👧‍👦 {members.length + 1} Jiwa
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                              hasKk
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-slate-100 text-slate-500'
-                            }`}
-                          >
-                            KK: {hasKk ? '✓ Tersedia' : 'Belum Ada'}
-                          </span>
-                          {hasKk && (() => {
-                            const reg = resolveWargaKkRegion(warga);
-                            return (
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-md border shadow-2xs ${reg.badgeColor}`}>
-                                <span>{reg.icon}</span>
-                                <span>{reg.shortLabel}</span>
-                              </span>
-                            );
-                          })()}
-                          {hasKtp && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              KTP: ✓ Tersedia
-                            </span>
-                          )}
+                    {/* No. KK Box (Clean inline banner with copy button) */}
+                    {canViewCitizenNoKk && citizenNoKk && (
+                      <div className="mt-3 bg-slate-50 border border-slate-200/80 rounded-xl p-2 px-3 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">No. KK:</span>
+                          <span className="font-mono font-extrabold text-slate-900 tracking-wider truncate">{citizenNoKk}</span>
                         </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(citizenNoKk);
+                            showStatusBanner(`No. KK ${citizenNoKk} disalin!`);
+                          }}
+                          className="text-[10px] font-bold text-teal-700 hover:text-teal-900 bg-white border border-slate-200 px-2 py-1 rounded-lg shrink-0 active:scale-95 transition-all"
+                        >
+                          Salin
+                        </button>
+                      </div>
+                    )}
 
-                        <div className="flex items-center gap-1.5">
-                          {(isKetuaRT || isCurrentUser || isAdmin || currentUser?.role === 'developer') && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setWargaEditForm({
-                                  id: warga.id,
-                                  username: warga.username || '',
-                                  nama: warga.nama || '',
-                                  noHp: warga.noHp || '',
-                                  status: warga.status || 'Warga Tetap',
-                                  umur: warga.umur ? String(warga.umur) : '',
-                                  tglLahir: warga.tglLahir || '',
-                                  jenisKelamin: inferJenisKelamin(warga.nama || '', 'Kepala Keluarga', warga.jenisKelamin),
-                                  noKk: warga.noKk || '',
-                                  alamat: warga.alamat || ''
-                                });
-                                setEditingWarga(warga);
-                                setShowWargaEditModal(true);
-                              }}
-                              className="px-2.5 py-1 text-[11px] font-extrabold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                              title="Edit data warga & jenis kelamin"
-                            >
-                              <icons.edit className="w-3.5 h-3.5" />
-                              <span>Edit Warga</span>
-                            </button>
-                          )}
-                          {(isKetuaRT || isAdmin || currentUser?.role === 'developer' || currentUser?.role === 'pengurus' || currentUser?.role === 'sekretaris') && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setUsernameTargetWarga(warga);
-                                setNewUsernameInput(warga.username || '');
-                                setShowKetuaRtUsernameModal(true);
-                              }}
-                              className="px-2.5 py-1 text-[11px] font-extrabold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                              title="Perbarui username akun warga (Wewenang Ketua RT)"
-                            >
-                              <span className="font-mono font-black text-amber-600">@</span>
-                              <span>Username</span>
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewPhotoWarga(warga);
-                            }}
-                            className="px-2.5 py-1 text-[11px] font-extrabold bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                            title="Pratinjau profil & identitas warga"
-                          >
-                            <span>📷</span>
-                            <span className="hidden sm:inline">Profil</span>
-                          </button>
-
-                          {canViewFamily && (
-                            <div className={`p-1.5 rounded-xl transition-colors flex items-center justify-center shrink-0 ${isExpanded ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-500'}`}>
-                              <icons.lainnya className={`w-3.5 h-3.5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                            </div>
-                          )}
-                        </div>
+                    {/* Clean Metadata Summary */}
+                    <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-y-1.5 text-[11px] text-slate-500 font-medium">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-700">{warga.rt || 'RT 01'}</span>
+                        <span>•</span>
+                        <span>👥 {members.length + 1} Jiwa</span>
+                        <span>•</span>
+                        <span className={hasKk ? 'text-emerald-700 font-semibold' : 'text-slate-400'}>
+                          KK: {hasKk ? 'Tersedia' : 'Belum Ada'}
+                        </span>
+                        {hasKk && (() => {
+                          const reg = resolveWargaKkRegion(warga);
+                          return (
+                            <span className="text-slate-600 font-semibold">({reg.shortLabel})</span>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
+
+                  {/* Actions Bar (Clean, non-overflowing bottom bar) */}
+                  {(isKetuaRT || isCurrentUser || isAdmin || currentUser?.role === 'developer' || currentUser?.role === 'pengurus' || currentUser?.role === 'sekretaris') && (
+                    <div className="bg-slate-50/80 border-t border-slate-100 p-2 px-3 flex items-center justify-end gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                      {(isKetuaRT || isCurrentUser || isAdmin || currentUser?.role === 'developer') && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWargaEditForm({
+                              id: warga.id,
+                              username: warga.username || '',
+                              nama: warga.nama || '',
+                              noHp: warga.noHp || '',
+                              status: warga.status || 'Warga Tetap',
+                              umur: warga.umur ? String(warga.umur) : '',
+                              tglLahir: warga.tglLahir || '',
+                              jenisKelamin: inferJenisKelamin(warga.nama || '', 'Kepala Keluarga', warga.jenisKelamin),
+                              noKk: warga.noKk || '',
+                              alamat: warga.alamat || ''
+                            });
+                            setEditingWarga(warga);
+                            setShowWargaEditModal(true);
+                          }}
+                          className="px-3 py-1.5 text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+                          title="Edit data warga & jenis kelamin"
+                        >
+                          <icons.edit className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Edit Warga</span>
+                        </button>
+                      )}
+
+                      {(isKetuaRT || isAdmin || currentUser?.role === 'developer' || currentUser?.role === 'pengurus' || currentUser?.role === 'sekretaris') && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUsernameTargetWarga(warga);
+                            setNewUsernameInput(warga.username || '');
+                            setShowKetuaRtUsernameModal(true);
+                          }}
+                          className="px-3 py-1.5 text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+                          title="Perbarui username akun warga"
+                        >
+                          <span className="font-mono text-slate-500 font-bold">@</span>
+                          <span>Username</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewPhotoWarga(warga);
+                        }}
+                        className="px-3 py-1.5 text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+                        title="Pratinjau profil & identitas warga"
+                      >
+                        <span>📷</span>
+                        <span>Profil</span>
+                      </button>
+                    </div>
+                  )}
 
                   <AnimatePresence>
                     {canViewFamily && isExpanded && (
