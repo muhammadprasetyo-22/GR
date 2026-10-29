@@ -1913,7 +1913,7 @@ const MobileQuickActions = ({ onActionClick, visibleMenus = [] }: { onActionClic
           setList={handleSetList}
           disabled={!isEditMode}
           animation={200}
-          className="grid grid-cols-4 gap-y-5 gap-x-3"
+          className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-y-5 gap-x-3 sm:gap-4"
         >
           {displayedActions.map((action, index) => (
             <motion.button 
@@ -2311,9 +2311,8 @@ const MobileBottomNav = ({ activeTab, onTabChange, user }: { activeTab: string, 
     <motion.nav 
       initial={{ y: 50 }} 
       animate={{ y: 0 }} 
-      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      // Efek glassmorphism tebal di bagian bawah
-      className="flex justify-around items-center px-1 py-2 pb-6 bg-white/90 backdrop-blur-xl border-t border-gray-100/50 fixed bottom-0 left-0 right-0 z-50 w-full shadow-[0_-10px_40px_rgba(0,0,0,0.05)]"
+      transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+      className="flex justify-around items-center px-2 py-2 pb-5 bg-white/92 backdrop-blur-2xl border-t border-slate-200/60 fixed bottom-0 left-0 right-0 z-50 w-full shadow-[0_-8px_32px_rgba(15,23,42,0.08)]"
     >
       {navItems.map((item) => {
         const isActive = activeTab === item.name;
@@ -2321,26 +2320,26 @@ const MobileBottomNav = ({ activeTab, onTabChange, user }: { activeTab: string, 
         return (
           <motion.button 
             key={item.name} 
-            whileTap={{ scale: 0.85 }}
+            whileTap={{ scale: 0.90 }}
             onClick={() => onTabChange(item.name)}
-            className={`relative flex flex-col items-center gap-1 transition-all p-2 rounded-2xl w-[68px] ${isActive ? 'text-teal-600' : 'text-slate-400 hover:text-slate-500'}`}
+            className={`relative flex flex-col items-center gap-1 transition-all py-1.5 px-2.5 rounded-2xl w-[68px] ${isActive ? 'text-teal-600' : 'text-slate-400 hover:text-slate-600'}`}
           >
             {/* Active Indicator Melayang (Framer Motion Layout Animation) */}
             {isActive && (
               <motion.div 
                 layoutId="bottomNavIndicator" 
-                className="absolute inset-0 bg-teal-50 rounded-2xl -z-10" 
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="absolute inset-0 bg-teal-500/10 border border-teal-500/20 rounded-2xl -z-10 shadow-xs" 
+                transition={{ type: "spring", stiffness: 380, damping: 28 }}
               />
             )}
             
             <motion.div
-               animate={isActive ? { y: -2 } : { y: 0 }}
-               transition={{ type: "spring", stiffness: 300 }}
+               animate={isActive ? { y: -2, scale: 1.1 } : { y: 0, scale: 1 }}
+               transition={{ type: "spring", stiffness: 350, damping: 25 }}
             >
-               <item.icon className={`w-5.5 h-5.5 ${isActive ? 'drop-shadow-sm' : ''}`} />
+               <item.icon className={`w-5.5 h-5.5 ${isActive ? 'drop-shadow-xs text-teal-600' : 'text-slate-400'}`} />
             </motion.div>
-            <span className={`text-[9px] ${isActive ? 'font-extrabold' : 'font-semibold'} whitespace-nowrap`}>
+            <span className={`text-[9.5px] ${isActive ? 'font-black text-teal-700' : 'font-medium text-slate-500'} whitespace-nowrap`}>
               {item.name}
             </span>
           </motion.button>
@@ -5017,10 +5016,10 @@ function MainApp({ user: originalUser, onLogout, onUpdateUser }: { user: any; on
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={activeMobileTab}
-              initial={activeMobileTab === 'Profil' ? { opacity: 0, y: "100%" } : { opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              exit={activeMobileTab === 'Profil' ? { opacity: 0, y: "100%" } : { opacity: 0, x: -20 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
+              initial={activeMobileTab === 'Profil' ? { opacity: 0, y: 30, scale: 0.97 } : { opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+              exit={activeMobileTab === 'Profil' ? { opacity: 0, y: 30, scale: 0.97 } : { opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               className="h-full overflow-y-auto pb-24 relative"
             >
               {activeMobileTab === 'Profil' ? (
