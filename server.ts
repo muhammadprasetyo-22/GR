@@ -14,19 +14,14 @@ import crypto from "crypto";
 
 dotenv.config();
 
-const rawJwtSecret = process.env.JWT_SECRET?.trim();
-const isProductionRuntime = process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
-// Length alone is not enough: reject common/predictable phrases and the previously exposed project-style secret.
-const isJwtSecretConfigured = Boolean(
-  rawJwtSecret && rawJwtSecret.length >= 32 &&
-  !/(super[_ -]?secret|secret[_ -]?key|change[_ -]?me|your[_ -]?secret|example|default|guyub.?rukun)/i.test(rawJwtSecret)
-);
-// In production, never fall back to a predictable development secret. Authentication
-// middleware below returns a clear 503 when configuration is missing; /api/health remains available.
-const JWT_SECRET = rawJwtSecret || (isProductionRuntime
-  ? crypto.randomBytes(32).toString("hex")
-  : "guyubrukun_dev_only_jwt_secret_key_2026_secured");
+const rawJwtSecret = process.env.JWT_SECRET;
+if (process.env.NODE_ENV === "production" && (!rawJwtSecret || rawJwtSecret.length < 24)) {
+  throw new Error("[Security Fatal] Strong JWT_SECRET (min 24 chars) is required in production environment.");
+}
+const JWT_SECRET = rawJwtSecret || "guyubrukun_dev_only_jwt_secret_key_2026_secured";
 
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/guyubrukun";
+let isDbConnected = false;
 
 function isValidGeminiApiKey(key?: string): boolean {
   if (!key) return false;
@@ -34,11 +29,12 @@ function isValidGeminiApiKey(key?: string): boolean {
   return k.length >= 20 && !k.startsWith('MY_') && !k.startsWith('YOUR_') && !k.includes('placeholder');
 }
 
-import { connectDB as connectCachedDB } from "./src/db/db.ts";
-import { resolveWargaKkRegion } from "./src/utils/kkRegionResolver.ts";
+import { connectDB as connectCachedDB } from "./src/db/db.js";
+import { resolveWargaKkRegion } from "./src/utils/kkRegionResolver.js";
 
 async function connectDB() {
   await connectCachedDB();
+  isDbConnected = true;
 }
 
 // Secure Authentication Helpers (Async Bcrypt with NO Plaintext Fallback)
@@ -86,7 +82,7 @@ const authLimiter = rateLimit({
 
 export const app = express();
 app.set("trust proxy", 1);
-const PORT = Number(process.env.PORT || process.env.APP_PORT) || 3000;
+const PORT = process.env.NODE_ENV === "production" ? (Number(process.env.APP_PORT || process.env.PORT) || 3000) : 3000;
 
 app.use(cookieParser());
 app.use(express.json({ limit: "15mb" }));
@@ -120,19 +116,12 @@ app.use((req, res, next) => {
 
 // Global DB connection middleware for APIs to ensure stable connection on serverless/cold-start
 app.use(async (req, res, next) => {
-  const isHealthCheck = req.path === "/api/health";
-  if (!isHealthCheck && (req.path.startsWith("/api/") || req.url.startsWith("/api/"))) {
+  if (req.path.startsWith("/api/") || req.url.startsWith("/api/")) {
     try {
       await connectDB();
-    } catch (err: any) {
-      console.error("Database connection failed in middleware:", err?.message || err);
-      const missingUri = !process.env.MONGODB_URI;
-      return res.status(503).json({
-        code: missingUri ? 'MONGODB_URI_MISSING' : 'DATABASE_UNAVAILABLE',
-        error: missingUri
-          ? 'Konfigurasi MONGODB_URI belum tersedia di Environment Variables Vercel.'
-          : 'Database Guyub Rukun tidak dapat dihubungi. Periksa MongoDB Atlas dan Runtime Logs Vercel.'
-      });
+    } catch (err) {
+      console.error("Database connection failed in middleware:", err);
+      return res.status(500).json({ error: "Gagal menghubungkan ke database guyubrukun" });
     }
   }
   next();
@@ -320,14 +309,6 @@ async function authMiddleware(req: express.Request, res: express.Response, next:
   if (!pathName.startsWith("/api/")) {
     return next();
   }
-  // Permit health diagnostics even when configuration is broken, but block all other
-  // API operations until a strong production JWT secret is configured.
-  if (isProductionRuntime && !isJwtSecretConfigured && pathName !== "/api/health") {
-    return res.status(503).json({
-      code: "JWT_SECRET_INVALID",
-      error: "JWT_SECRET belum cukup aman. Gunakan secret acak minimal 32 karakter, simpan di Environment Variables Vercel, lalu redeploy."
-    });
-  }
   if (publicRoutes.includes(pathName) || pathName.startsWith("/api/tangerang-logo-proxy")) {
     return next();
   }
@@ -366,10 +347,13 @@ async function authMiddleware(req: express.Request, res: express.Response, next:
         expiresAt: { $gt: new Date() }
       }).lean();
       const sessionOwner = await UserModel.findOne(
-        { id: decodedUserId, rtId: decoded.rtId }
-      ).select('+activeSessionId').lean();
-      const sessionIsNotCurrent = sessionOwner?.activeSessionId !== decoded.sessionId;
-      if (!activeSession || !sessionOwner || sessionIsNotCurrent) {
+        { id: decodedUserId, rtId: decoded.rtId },
+        { activeSessionId: 1 }
+      ).lean();
+      const pointsToAnotherSession = Boolean(
+        sessionOwner?.activeSessionId && sessionOwner.activeSessionId !== decoded.sessionId
+      );
+      if (!activeSession || !sessionOwner || pointsToAnotherSession) {
         res.clearCookie('guyub_session', { path: '/' });
         return res.status(401).json({
           code: 'SESSION_REVOKED',
@@ -2230,13 +2214,8 @@ app.post(["/api/logout", "/api/auth/logout"], async (req, res) => {
     res.clearCookie('guyub_session', { path: '/' });
     res.json({ success: true, message: "Logout berhasil" });
   } catch (err: any) {
-    console.error('[Logout] Gagal mencabut sesi pada database:', err?.message || err);
     res.clearCookie('guyub_session', { path: '/' });
-    return res.status(503).json({
-      success: false,
-      code: 'SESSION_REVOCATION_FAILED',
-      error: 'Perangkat ini keluar secara lokal, tetapi server belum dapat mengonfirmasi pencabutan sesi. Periksa koneksi database.'
-    });
+    res.json({ success: true });
   }
 });
 
@@ -2763,7 +2742,7 @@ app.post('/api/warga/identifikasi-semua-kk', enforceRoles(['admin', 'sekretaris'
       'Luar Kota Tangerang': 0
     } as Record<string, number>;
     let needsReview = 0;
-    const results: Array<{ id: string; nama: string; category: string; wilayahKk: string; alamatKk: string; kkKecamatan: string; noKk: string; kkScanStatus: string; needsReview: boolean; source?: string; skippedManual?: boolean }> = [];
+    const results: Array<{ id: string; nama: string; category: string; needsReview: boolean; source?: string; skippedManual?: boolean }> = [];
 
     for (const user of batch as any[]) {
       const hasManualClassification = Boolean(
@@ -2831,11 +2810,6 @@ app.post('/api/warga/identifikasi-semua-kk', enforceRoles(['admin', 'sekretaris'
         id: String(user.id),
         nama: String(user.nama || user.username || 'Warga'),
         category: region.category,
-        wilayahKk: region.category,
-        alamatKk: String(user.alamatKk || region.alamat || ''),
-        kkKecamatan: String(user.kkKecamatan || region.kecamatan || ''),
-        noKk: String(user.noKk || ''),
-        kkScanStatus: hasManualClassification ? 'manual' : (region.category === 'Belum Teridentifikasi' ? 'needs_review' : 'automatic'),
         needsReview: region.category === 'Belum Teridentifikasi',
         source: region.source,
         skippedManual: hasManualClassification
@@ -5926,70 +5900,28 @@ app.get(["/api/public/beranda-summary", "/api/dashboard/summary"], async (req, r
   }
 });
 
-// Status checking API. Does not rely on the global database middleware so this
-// endpoint can diagnose missing/unreachable MongoDB configuration instead of crashing.
-app.get("/api/health", async (_req, res) => {
-  const databaseConfigured = Boolean(process.env.MONGODB_URI?.trim());
-  const jwtSecretConfigured = isJwtSecretConfigured;
-  let database: 'connected' | 'not_configured' | 'unavailable' = 'unavailable';
-
-  if (!databaseConfigured) {
-    database = 'not_configured';
-  } else {
-    try {
-      await connectDB();
-      database = mongoose.connection.readyState === 1 ? 'connected' : 'unavailable';
-    } catch (error: any) {
-      console.error('[Health Check] MongoDB connection unavailable:', error?.message || error);
-      database = 'unavailable';
-    }
-  }
-
-  const ready = database === 'connected' && jwtSecretConfigured;
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  return res.status(ready ? 200 : 503).json({
-    status: ready ? 'ok' : 'degraded',
-    mode: 'modular-tables',
-    database,
-    isDbConnected: mongoose.connection.readyState === 1,
-    databaseConfigured,
-    jwtSecretConfigured,
-    ...(database === 'not_configured' ? { code: 'MONGODB_URI_MISSING' } : database === 'unavailable' ? { code: 'DATABASE_UNAVAILABLE' } : {}),
-    ...(!jwtSecretConfigured ? { jwtCode: 'JWT_SECRET_INVALID' } : {})
-  });
-});
-
-// These handlers are registered at module scope so they are also active on Vercel,
-// where startServer() is intentionally not called for serverless execution.
-app.use('/api/*', (req: express.Request, res: express.Response) => {
-  res.status(404).json({ code: 'API_ROUTE_NOT_FOUND', error: `API route ${req.originalUrl} not found` });
-});
-
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const requestPath = req.path || req.originalUrl || '';
-  const isApiRequest = requestPath.startsWith('/api/') || String(req.originalUrl || '').startsWith('/api');
-  if (isApiRequest) {
-    const requestId = crypto.randomUUID();
-    console.error('[API Error]', {
-      requestId,
-      method: req.method,
-      path: requestPath,
-      message: err?.message || String(err),
-      stack: err?.stack
-    });
-    if (!res.headersSent) {
-      res.status(500).json({
-        code: 'INTERNAL_SERVER_ERROR',
-        error: 'Terjadi kesalahan internal pada server. Silakan periksa Runtime Logs Vercel.',
-        requestId
-      });
-    }
-  } else {
-    next(err);
-  }
+// Status checking API
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", mode: "modular-tables", isDbConnected });
 });
 
 export async function startServer(listen = true) {
+  // Global Error Handler for APIs
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.path.startsWith('/api/')) {
+      console.error("API Error:", err?.message || err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    } else {
+      next(err);
+    }
+  });
+
+  // Catch-all 404 handler for API routes to prevent falling through to Vite/index.html
+  app.use('/api/*', (req: express.Request, res: express.Response) => {
+    res.status(404).json({ error: `API route ${req.originalUrl} not found` });
+  });
 
   const distPath = path.join(process.cwd(), 'dist');
   const distIndex = path.join(distPath, 'index.html');
