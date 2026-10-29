@@ -9,16 +9,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-import cookieParser from "cookie-parser";
-import crypto from "crypto";
-
 dotenv.config();
 
-const rawJwtSecret = process.env.JWT_SECRET;
-if (process.env.NODE_ENV === "production" && (!rawJwtSecret || rawJwtSecret.length < 24)) {
-  throw new Error("[Security Fatal] Strong JWT_SECRET (min 24 chars) is required in production environment.");
-}
-const JWT_SECRET = rawJwtSecret || "guyubrukun_dev_only_jwt_secret_key_2026_secured";
+const JWT_SECRET = process.env.JWT_SECRET || "guyubrukunsecretkey_for_jwt2026";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/guyubrukun";
 let isDbConnected = false;
@@ -36,22 +29,12 @@ async function connectDB() {
   isDbConnected = true;
 }
 
-// Secure Authentication Helpers (Async Bcrypt with NO Plaintext Fallback)
-async function verifyPasswordAsync(input: string, stored: string): Promise<boolean> {
-  if (!input || !stored) return false;
-  if (stored.startsWith('$2') && stored.length >= 50) {
-    return bcrypt.compare(input, stored);
-  }
-  // Plaintext credentials in database are rejected - must be hashed
-  return false;
-}
-
+// Secure Authentication Helpers
 function verifyPassword(input: string, stored: string): boolean {
-  if (!input || !stored) return false;
-  if (stored.startsWith('$2') && stored.length >= 50) {
+  if (stored && stored.startsWith('$2') && stored.length >= 50) {
     return bcrypt.compareSync(input, stored);
   }
-  return false;
+  return input === stored;
 }
 
 function hashPassword(password: string): string {
@@ -70,22 +53,12 @@ const apiLimiter = rateLimit({
   validate: { trustProxy: false, xForwardedForHeader: false }
 });
 
-// Rate Limiter Khusus Endpoint Autentikasi (Proteksi Brute-Force)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 menit
-  max: 30, // Maksimal 30 percobaan login/register per 15 menit per IP
-  message: { error: "Terlalu banyak percobaan autentikasi. Silakan tunggu 15 menit sebelum mencoba kembali." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 export const app = express();
 app.set("trust proxy", 1);
 const PORT = process.env.NODE_ENV === "production" ? (Number(process.env.APP_PORT || process.env.PORT) || 3000) : 3000;
 
-app.use(cookieParser());
-app.use(express.json({ limit: "15mb" }));
-app.use(express.urlencoded({ limit: "15mb", extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Vercel Serverless rewrite support: map /api?__route=..., [...slug], or x-matched-path back to /api/...
 app.use((req, res, next) => {
@@ -120,16 +93,14 @@ app.use(async (req, res, next) => {
       await connectDB();
     } catch (err) {
       console.error("Database connection failed in middleware:", err);
-      return res.status(500).json({ error: "Gagal menghubungkan ke database guyubrukun" });
+      return res.status(500).json({ error: "Gagal menghubungkan ke database" });
     }
   }
   next();
 });
 
-// Apply rate limiting to auth routes specifically
-app.use("/api/auth/", authLimiter);
-app.use("/api/login", authLimiter);
-app.use("/api/register", authLimiter);
+// Apply rate limiting to all requests
+app.use("/api/", apiLimiter);
 
 // ==========================================
 // CENTRAL AUTHORIZED RT CONTEXT & HELPERS
@@ -289,8 +260,8 @@ export async function checkTenantSubscription(req: express.Request, res: express
   }
 }
 
-// Auth Verification Middleware - Secure Session Cookie & Bearer Token with DB Check
-async function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+// Auth Verification Middleware - NO UNAUTHENTICATED FALLBACK TO ADMIN/RT01
+function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
   const publicRoutes = [
     "/api/login",
     "/api/register",
@@ -312,47 +283,31 @@ async function authMiddleware(req: express.Request, res: express.Response, next:
     return next();
   }
   
-  // 1. Check HTTP-only Session Cookie First (Gold Standard)
-  const cookieToken = req.cookies?.['guyub_session'];
-  
-  // 2. Check Authorization Bearer header
   const authHeader = req.headers['authorization'];
-  let bearerToken = "";
+  let token = "";
   if (authHeader && authHeader.startsWith("Bearer ")) {
-    bearerToken = authHeader.substring(7);
+    token = authHeader.substring(7);
+  } else {
+    token = (req.query.token as string) || (req.headers['x-auth-token'] as string) || "";
   }
-
-  const token = cookieToken || bearerToken || (req.query.token as string) || (req.headers['x-auth-token'] as string) || "";
   
   if (token) {
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
-      
-      // If token contains sessionId, verify that session is not revoked in MongoDB
-      if (decoded.sessionId) {
-        await connectDB();
-        const activeSession = await SessionModel.findOne({ sessionId: decoded.sessionId, isRevoked: false });
-        if (!activeSession) {
-          res.clearCookie('guyub_session');
-          return res.status(401).json({ error: "Sesi telah berakhir atau dicabut. Silakan login kembali." });
-        }
-      }
-
       (req as any).user = decoded;
-      req.headers['x-user-id'] = decoded.userId || decoded.id;
+      req.headers['x-user-id'] = decoded.id;
       req.headers['x-user-role'] = decoded.role;
       req.headers['x-user-username'] = decoded.username;
       req.headers['x-user-nama'] = decoded.nama;
       req.headers['x-rt-id'] = decoded.rtId;
       return next();
     } catch {
-      res.clearCookie('guyub_session');
-      return res.status(401).json({ error: "Token atau sesi tidak valid" });
+      return res.status(401).json({ error: "Unauthorized" });
     }
   }
 
   // PRIVATE ENDPOINTS: No token = 401 Unauthorized
-  return res.status(401).json({ error: "Unauthorized: Silakan login terlebih dahulu" });
+  return res.status(401).json({ error: "Unauthorized" });
 }
 
 app.use(authMiddleware);
@@ -683,54 +638,6 @@ const MenuAccessSchema = new mongoose.Schema({
   deleteMenus: [{ type: String }]
 }, { timestamps: true });
 const MenuAccessModel: mongoose.Model<any> = mongoose.models.MenuAccess || mongoose.model("MenuAccess", MenuAccessSchema);
-
-// 18. Server-Side Session Schema (Mongoose TTL Session with Revocation)
-const SessionSchema = new mongoose.Schema({
-  sessionId: { type: String, required: true, unique: true },
-  userId: { type: String, required: true },
-  rtId: { type: String, required: true },
-  role: { type: String, required: true },
-  ip: { type: String },
-  userAgent: { type: String },
-  expiresAt: { type: Date, required: true },
-  isRevoked: { type: Boolean, default: false }
-}, { timestamps: true });
-SessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // MongoDB TTL auto cleanup
-SessionSchema.index({ userId: 1, isRevoked: 1 });
-SessionSchema.index({ rtId: 1 });
-const SessionModel: mongoose.Model<any> = mongoose.models.Session || mongoose.model("Session", SessionSchema);
-
-// 19. SaaS Plan & Entitlement Schema
-const PlanSchema = new mongoose.Schema({
-  code: { type: String, required: true, unique: true }, // 'free', 'basic', 'vip'
-  name: { type: String, required: true },
-  priceIdr: { type: Number, default: 0 },
-  billingCycle: { type: String, enum: ['monthly', 'yearly', 'free'], default: 'monthly' },
-  maxWarga: { type: Number, default: 50 },
-  maxStorageMb: { type: Number, default: 100 },
-  allowedModules: [{ type: String }],
-  allowAiAssistant: { type: Boolean, default: false },
-  allowCustomLetterhead: { type: Boolean, default: false }
-}, { timestamps: true });
-const PlanModel: mongoose.Model<any> = mongoose.models.Plan || mongoose.model("Plan", PlanSchema);
-
-// 20. SaaS Subscription & Billing Invoices Schema
-const SubscriptionSchema = new mongoose.Schema({
-  subscriptionId: { type: String, required: true, unique: true },
-  rtId: { type: String, required: true },
-  planCode: { type: String, required: true, default: 'free' },
-  status: { type: String, enum: ['trialing', 'active', 'past_due', 'expired', 'canceled', 'suspended'], default: 'active' },
-  startDate: { type: Date, default: Date.now },
-  expiredAt: { type: Date, required: true },
-  gracePeriodUntil: { type: Date },
-  amountPaid: { type: Number, default: 0 },
-  paymentMethod: { type: String, default: 'manual_transfer' }, // 'manual_transfer', 'midtrans', 'xendit'
-  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'verified'], default: 'paid' },
-  invoiceNumber: { type: String },
-  notes: { type: String }
-}, { timestamps: true });
-SubscriptionSchema.index({ rtId: 1, status: 1 });
-const SubscriptionModel: mongoose.Model<any> = mongoose.models.Subscription || mongoose.model("Subscription", SubscriptionSchema);
 
 
 // ==========================================
@@ -2073,27 +1980,11 @@ async function handleLogin(req: express.Request, res: express.Response, next: ex
     // Check Tenant Subscription status
     const tenant = await TenantModel.findOne({ rtId: user.rtId });
 
-    // 1. Create server-side Session in MongoDB
-    const sessionId = `sess_${crypto.randomBytes(24).toString('hex')}`;
-    const sessionExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 hari
-
-    await SessionModel.create({
-      sessionId,
-      userId: user.id,
-      rtId: user.rtId,
-      role: user.role,
-      ip: (req.ip || req.headers['x-forwarded-for'] || '').toString(),
-      userAgent: req.headers['user-agent'] || '',
-      expiresAt: sessionExpiresAt,
-      isRevoked: false
-    });
-
-    // 2. JWT token payload strictly uses userId, rtId, role, and sessionId
+    // JWT token payload strictly uses userId, rtId, and role
     const token = jwt.sign(
       { 
         id: user.id, 
         userId: user.id,
-        sessionId,
         username: user.username, 
         nik: user.nik,
         role: user.role, 
@@ -2101,24 +1992,11 @@ async function handleLogin(req: express.Request, res: express.Response, next: ex
         rtId: user.rtId 
       },
       JWT_SECRET,
-      { expiresIn: "30d" }
+      { expiresIn: "365d" }
     );
 
-    // 3. Set Secure HTTP-Only Cookie
-    res.cookie('guyub_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 30 * 24 * 60 * 60 * 1000
-    });
-
     const userJson = user.toObject();
-    delete userJson.password; // Never expose password hash
-    delete userJson.dokumenKk; // Never expose large private document in general login
-    delete userJson.dokumenKtp;
     userJson.token = token;
-    userJson.sessionId = sessionId;
     userJson.isVip = tenant?.isVip || tenant?.packageTier === 'VIP' || false;
     userJson.tenant = {
       rtId: user.rtId,
@@ -2156,28 +2034,13 @@ app.post("/api/ping", async (req, res) => {
   res.json({ success: true, isVip });
 });
 
-app.post(["/api/logout", "/api/auth/logout"], async (req, res) => {
-  try {
-    const userAuth = getAuthUser(req);
-    const sessionId = userAuth?.sessionId;
-    const userId = userAuth?.userId || userAuth?.id || req.body?.id;
-
-    if (sessionId) {
-      await connectDB();
-      await SessionModel.updateOne({ sessionId }, { $set: { isRevoked: true } });
-    }
-
-    if (userId) {
-      activeSessions.delete(userId);
-      broadcastEvent('update', { type: 'online_status' });
-    }
-
-    res.clearCookie('guyub_session', { path: '/' });
-    res.json({ success: true, message: "Logout berhasil" });
-  } catch (err: any) {
-    res.clearCookie('guyub_session', { path: '/' });
-    res.json({ success: true });
+app.post("/api/logout", (req, res) => {
+  const { id } = req.body;
+  if (id) {
+    activeSessions.delete(id);
+    broadcastEvent('update', { type: 'online_status' });
   }
+  res.json({ success: true });
 });
 
 app.get("/api/notifications", async (req, res) => {
@@ -2256,31 +2119,23 @@ app.get("/api/stream", (req, res) => {
   });
 });
 
-app.put(["/api/password", "/api/auth/change-password"], async (req, res) => {
+app.put("/api/password", async (req, res) => {
   const { id, oldPassword, newPassword } = req.body;
   const rtId = getAuthorizedRtId(req);
   const userAuth = getAuthUser(req);
-  const targetId = userAuth?.userId || userAuth?.id || id;
-
-  if (!newPassword || newPassword.length < 8) {
-    return res.status(400).json({ error: "Password baru minimal 8 karakter." });
-  }
+  const targetId = userAuth?.id || id;
 
   const user = await UserModel.findOne({ id: targetId, rtId });
   if (user) {
-    const isOldValid = await verifyPasswordAsync(oldPassword, user.password);
-    if (!isOldValid) {
+    if (!verifyPassword(oldPassword, user.password)) {
       return res.status(400).json({ error: "Password lama tidak sesuai" });
     }
     const beforeObj = { password: "*****" };
     user.password = hashPassword(newPassword);
     await user.save();
-
-    // Security Hardening: Invalidate all existing sessions on password change
-    await SessionModel.updateMany({ userId: user.id }, { $set: { isRevoked: true } });
     
     await logAudit(rtId, user.nama, "PASSWORD_UPDATE", `Mengubah password akun`, beforeObj, { password: "*****" });
-    res.json({ message: "Password berhasil diganti. Sesi lain telah dinonaktifkan." });
+    res.json({ message: "Password berhasil diganti" });
   } else {
     res.status(404).json({ error: "User tidak ditemukan" });
   }
@@ -2519,32 +2374,17 @@ app.post("/api/change-username", async (req, res) => {
 });
 
 // GET current authenticated user profile
-app.get(["/api/me", "/api/auth/me"], async (req, res) => {
+app.get("/api/me", async (req, res) => {
   try {
     await connectDB();
     const rtId = getAuthorizedRtId(req);
     const userAuth = getAuthUser(req);
-    const requesterId = userAuth?.userId || userAuth?.id || '';
-    if (!requesterId) return res.status(401).json({ error: "Unauthorized: Silakan login terlebih dahulu" });
+    const requesterId = userAuth?.id || (req.headers['x-user-id'] as string) || '';
+    if (!requesterId) return res.status(401).json({ error: "Unauthorized" });
 
-    const query: any = { id: requesterId };
-    if (userAuth?.role !== 'developer') {
-      query.rtId = rtId;
-    }
-
-    const user = await UserModel.findOne(query).select('-password -dokumenKk -dokumenKtp').lean();
+    const user = await UserModel.findOne({ id: requesterId, rtId }).lean();
     if (!user) return res.status(404).json({ error: "User tidak ditemukan" });
 
-    const tenant = await TenantModel.findOne({ rtId: user.rtId }).lean();
-    (user as any).tenant = {
-      rtId: user.rtId,
-      namaRt: tenant?.namaRt || `RT ${user.rtId.replace('rt', '').padStart(2, '0')}`,
-      packageTier: tenant?.packageTier || 'Free',
-      statusLangganan: tenant?.statusLangganan !== false,
-      expiredAt: tenant?.expiredAt
-    };
-
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({ user });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -4092,24 +3932,10 @@ app.post("/api/iuran/remind", enforceRoles(['admin', 'pengurus', 'sekretaris', '
   }
 });
 
-async function checkRtVipStatus(rtId: string, userRole?: string): Promise<boolean> {
-  if (userRole === 'developer') return true;
-  const config = await RtConfigModel.findOne({ rtId }).lean();
-  return Boolean(config?.isVip || config?.packageTier === 'VIP');
-}
-
 // --- COMPATIBLE APP_DATA / MULTI-MODULE ENDPOINTS ---
 app.get("/api/data/:resource", async (req, res) => {
   const rtId = getAuthorizedRtId(req);
   const resource = req.params.resource;
-
-  if (['umkm', 'inventaris', 'notulen', 'voting'].includes(resource)) {
-    const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
-    const isVip = await checkRtVipStatus(rtId, userRole);
-    if (!isVip) {
-      return res.status(403).json({ error: `Fitur ${resource.toUpperCase()} hanya dapat diakses oleh RT berstatus VIP.` });
-    }
-  }
   
   const map: { [key: string]: mongoose.Model<any> } = {
     surat: SuratModel,
@@ -4235,14 +4061,6 @@ app.get("/api/data/:resource", async (req, res) => {
 app.post("/api/data/:resource", async (req, res) => {
   const rtId = getAuthorizedRtId(req);
   const resource = req.params.resource;
-
-  if (['umkm', 'inventaris', 'notulen', 'voting'].includes(resource)) {
-    const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
-    const isVip = await checkRtVipStatus(rtId, userRole);
-    if (!isVip) {
-      return res.status(403).json({ error: `Fitur ${resource.toUpperCase()} hanya dapat diakses oleh RT berstatus VIP.` });
-    }
-  }
   
   const map: { [key: string]: mongoose.Model<any> } = {
     surat: SuratModel,
@@ -4427,14 +4245,6 @@ app.put("/api/data/:resource/:id", async (req, res) => {
   const rtId = getAuthorizedRtId(req);
   const resource = req.params.resource;
 
-  if (['umkm', 'inventaris', 'notulen', 'voting'].includes(resource)) {
-    const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
-    const isVip = await checkRtVipStatus(rtId, userRole);
-    if (!isVip) {
-      return res.status(403).json({ error: `Fitur ${resource.toUpperCase()} hanya dapat diakses oleh RT berstatus VIP.` });
-    }
-  }
-
   const map: { [key: string]: mongoose.Model<any> } = {
     surat: SuratModel,
     laporan: LaporanModel,
@@ -4586,14 +4396,6 @@ app.put("/api/data/:resource/:id", async (req, res) => {
 app.delete("/api/data/:resource/:id", async (req, res) => {
   const rtId = getAuthorizedRtId(req);
   const resource = req.params.resource;
-
-  if (['umkm', 'inventaris', 'notulen', 'voting'].includes(resource)) {
-    const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
-    const isVip = await checkRtVipStatus(rtId, userRole);
-    if (!isVip) {
-      return res.status(403).json({ error: `Fitur ${resource.toUpperCase()} hanya dapat diakses oleh RT berstatus VIP.` });
-    }
-  }
 
   const map: { [key: string]: mongoose.Model<any> } = {
     surat: SuratModel,
@@ -4804,22 +4606,12 @@ app.post("/api/sedekah", async (req, res) => {
 // ==========================================
 app.get("/api/voting", async (req, res) => {
   const rtId = req.headers['x-rt-id'] as string || 'rt01';
-  const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
-  const isVip = await checkRtVipStatus(rtId, userRole);
-  if (!isVip) {
-    return res.status(403).json({ error: "Fitur Voting Warga hanya tersedia untuk RT berstatus VIP." });
-  }
   const data = await VotingModel.find({ rtId }).sort({ createdAt: -1 }).lean();
   res.json({ data });
 });
 
 app.post("/api/voting", enforceRoles(['admin']), async (req, res) => {
   const rtId = req.headers['x-rt-id'] as string || 'rt01';
-  const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
-  const isVip = await checkRtVipStatus(rtId, userRole);
-  if (!isVip) {
-    return res.status(403).json({ error: "Fitur Voting Warga hanya tersedia untuk RT berstatus VIP." });
-  }
   const { title, category, description, deadline, options, status, createdBy } = req.body;
 
   if (!title || !Array.isArray(options) || options.length < 2) {
@@ -5251,11 +5043,6 @@ app.post("/api/backup/restore", enforceRoles(['admin']), async (req, res) => {
 app.post("/api/gemini/action", async (req, res) => {
   const { action, payload } = req.body;
   const rtId = req.headers['x-rt-id'] as string || 'rt01';
-  const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
-  const isVip = await checkRtVipStatus(rtId, userRole);
-  if (!isVip) {
-    return res.status(403).json({ error: "Fitur Smart RT AI hanya tersedia untuk RT berstatus VIP." });
-  }
 
   try {
     let prompt = "";

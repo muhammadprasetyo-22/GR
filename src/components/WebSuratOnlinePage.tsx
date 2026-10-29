@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, Plus, Filter, FileText, CheckCircle2, Clock, 
   AlertTriangle, Download, ArrowLeft, RefreshCw, PenTool, 
-  Check, MapPin, Smile, User2, Eye, Minimize2, CheckSquare, X, Calendar, FileCheck, Trash2
+  Check, MapPin, Smile, User2, Eye, Minimize2, CheckSquare, X, Calendar, FileCheck, Trash2, Crown
 } from 'lucide-react';
 import { apiFetch } from '../apiInterceptor';
+import { VipComparisonModal } from './common/VipComparisonModal';
 
 const loadImageAsBase64 = (url: string): Promise<string> => {
   return new Promise((resolve) => {
@@ -212,6 +213,8 @@ export const WebSuratOnlinePage = ({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'semua' | 'proses' | 'selesai'>('semua');
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const [showVipModal, setShowVipModal] = useState(false);
+  const [downloadLimitAlert, setDownloadLimitAlert] = useState<string | null>(null);
 
   // Form (Citizen submission dialog)
   const [showFormModal, setShowFormModal] = useState(false);
@@ -509,8 +512,40 @@ export const WebSuratOnlinePage = ({
     }
   };
 
-  const handleDownloadPDF = (surat: any) => {
+  const handleDownloadPDF = async (surat: any) => {
     if (isGeneratingPdf) return;
+
+    // 1. Verifikasi Batas Unduh (Reguler vs VIP)
+    try {
+      const trackRes = await apiFetch(`/api/surat/${encodeURIComponent(surat.id)}/track-download`, {
+        method: 'POST'
+      });
+      const trackData = await trackRes.json().catch(() => ({}));
+
+      if (!trackRes.ok) {
+        if (trackData?.requiresVip) {
+          setDownloadLimitAlert(trackData.error || 'Batas unduh surat paket Reguler (3x) telah tercapai. Tingkatkan ke VIP untuk mengunduh berkali-kali tanpa batas.');
+          setShowVipModal(true);
+          return;
+        }
+        if (trackRes.status === 403) {
+          alert(trackData?.error || 'Batas unduh dokumen telah tercapai.');
+          return;
+        }
+        console.warn("Track download notice:", trackData);
+      } else {
+        // Update local item download count so UI shows live stats
+        if (typeof trackData?.downloadCount === 'number') {
+          setData(prev => prev.map(d => d.id === surat.id ? { ...d, downloadCount: trackData.downloadCount } : d));
+          if (selectedItem?.id === surat.id) {
+            setSelectedItem((prev: any) => ({ ...prev, downloadCount: trackData.downloadCount }));
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Track download fallback:", err);
+    }
+
     setIsGeneratingPdf(true);
     let fileName = `Surat_Pengantar_${surat.nama.replace(/\s+/g, '_')}_${surat.id.substring(0, 5)}.pdf`;
 
@@ -719,26 +754,37 @@ export const WebSuratOnlinePage = ({
             </h3>
             <p className="text-[11px] text-gray-400 font-bold mt-0.5 uppercase tracking-wider">Pelayanan RT 01/RW 21</p>
           </div>
-          {!isAdminOrPengurus && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                handleResetForm();
-                setShowFormModal(true);
-              }}
-              className="bg-teal-600 text-white hover:bg-teal-700 px-3.5 py-2.5 rounded-xl text-xs font-black transition shadow-sm hover:shadow flex items-center gap-1 cursor-pointer"
+              onClick={() => setShowVipModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 text-xs font-black hover:bg-amber-500/20 transition cursor-pointer"
+              title="Lihat Perbedaan Paket Reguler vs VIP"
             >
-              <Plus className="w-4 h-4" /> Ajukan Baru
+              <Crown className="w-4 h-4 text-amber-500" />
+              <span>{user?.isVip ? 'VIP Aktif' : 'Perbedaan VIP'}</span>
             </button>
-          )}
-          {user?.role === 'admin' && (
-            <button
-              onClick={exportToExcel}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-black transition shadow-sm hover:shadow flex items-center gap-1 cursor-pointer"
-              title="Ekspor pengajuan ke format Excel / CSV"
-            >
-              <Download className="w-4 h-4" /> Export Excel
-            </button>
-          )}
+
+            {!isAdminOrPengurus && (
+              <button
+                onClick={() => {
+                  handleResetForm();
+                  setShowFormModal(true);
+                }}
+                className="bg-teal-600 text-white hover:bg-teal-700 px-3.5 py-2.5 rounded-xl text-xs font-black transition shadow-sm hover:shadow flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Ajukan Baru
+              </button>
+            )}
+            {user?.role === 'admin' && (
+              <button
+                onClick={exportToExcel}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-black transition shadow-sm hover:shadow flex items-center gap-1 cursor-pointer"
+                title="Ekspor pengajuan ke format Excel / CSV"
+              >
+                <Download className="w-4 h-4" /> Export Excel
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Dynamic Card statistics */}
@@ -1095,12 +1141,29 @@ export const WebSuratOnlinePage = ({
 
                 {/* Citizen download fully generated letter sheet */}
                 {selectedItem.status === 'selesai' && (
-                  <button
-                    onClick={() => handleDownloadPDF(selectedItem)}
-                    className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-5 py-3 text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md shadow-teal-100 hover:shadow-lg hover:shadow-teal-150 active:scale-95 cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" /> Unduh Dokumen Resmi (PDF)
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1">
+                      <Download className="w-3 h-3 text-teal-600" />
+                      <span>{selectedItem.downloadCount || 0}x diunduh</span>
+                      {user?.isVip ? (
+                        <span className="text-amber-600 font-extrabold ml-1 flex items-center gap-0.5">
+                          <Crown className="w-3 h-3 text-amber-500" /> VIP (Tanpa Batas)
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-semibold ml-1">
+                          (Sisa {Math.max(0, 3 - (selectedItem.downloadCount || 0))}x)
+                        </span>
+                      )}
+                    </span>
+
+                    <button
+                      onClick={() => handleDownloadPDF(selectedItem)}
+                      className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-5 py-3 text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md shadow-teal-100 hover:shadow-lg hover:shadow-teal-150 active:scale-95 cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" /> Unduh Dokumen Resmi (PDF)
+                      {user?.isVip && <Crown className="w-3.5 h-3.5 text-amber-300 ml-1" />}
+                    </button>
+                  </div>
                 )}
 
                 {/* RT can delete finished letter */}
@@ -1896,6 +1959,17 @@ export const WebSuratOnlinePage = ({
           </div>
         </div>
       )}
+
+      {/* MODAL PERBANDINGAN FITUR REGULER VS VIP */}
+      <VipComparisonModal
+        isOpen={showVipModal}
+        onClose={() => setShowVipModal(false)}
+        isVip={Boolean(user?.isVip)}
+        currentRt={user?.rtId ? `RT ${user.rtId.replace('rt', '').padStart(2, '0')}` : 'RT 01'}
+        onUpgradeClick={() => {
+          alert('Silakan hubungi Pengurus RT atau Developer Guyub Rukun untuk aktivasi lisensi VIP.');
+        }}
+      />
 
     </div>
   );

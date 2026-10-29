@@ -26,8 +26,8 @@ export const VIP_COMPARISON_DATA = [
   {
     category: 'Keamanan & Komunitas',
     icon: Shield,
-    reguler: 'Tombol Darurat, Buku Tamu, Pengumuman, Laporan',
-    vip: 'Layanan Ekosistem VIP: UMKM Warga, Pemungutan Suara (Voting) Digital & Badge Lingkungan Eksklusif'
+    reguler: 'Tombol Darurat, Buku Tamu, UMKM, Pengumuman',
+    vip: 'Seluruh Fitur Keamanan, Broadcast Prioritas & Badge Lingkungan Eksklusif'
   },
   {
     category: 'Kecerdasan Buatan (AI)',
