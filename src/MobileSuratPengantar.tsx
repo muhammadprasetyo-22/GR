@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { apiFetch } from './apiInterceptor';
 import { motion, AnimatePresence } from 'motion/react';
 import { icons } from './App';
-import { suratFormSchema, validateForm } from './utils/formValidation';
 
 const loadImageAsBase64 = (url: string): Promise<string> => {
   return new Promise((resolve) => {
@@ -413,9 +412,6 @@ export const MobileSuratPengantar = ({
     } catch(e) {
       console.error(e);
       fetchData();
-    } finally {
-      setIsSubmitting(false);
-      setLoading(false);
     }
   };
 

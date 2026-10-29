@@ -32,13 +32,6 @@ export interface User {
   dokumenKtp?: string | any;
   hasKk?: boolean;
   hasKtp?: boolean;
-  kkCategory?: 'kabupaten_tangerang' | 'kota_tangerang' | 'luar_kota_tangerang' | 'belum_teridentifikasi' | string;
-  kkKecamatan?: string;
-  kkKelurahan?: string;
-  kkKabupatenKota?: string;
-  kkProvinsi?: string;
-  kkAlamatLengkap?: string;
-  kkVerifiedByAdmin?: boolean;
   isOnline?: boolean;
   token?: string;
   createdAt?: string;

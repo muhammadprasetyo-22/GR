@@ -1,7 +1,6 @@
 import { apiFetch } from './apiInterceptor';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { kasFormSchema, transferKasSchema, validateForm } from './utils/formValidation';
 
 // --- Ikon Lengkap & Modern ---
 const Icons = {
@@ -149,26 +148,16 @@ export const MobileKas = ({ onBack, currentUser }: { onBack: () => void, current
     setPage(1);
   }, [searchQuery]);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const handleTambah = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
     
-    const nominal = parseInt(amount.replace(/\D/g, '') || '0', 10);
-    const validRes = validateForm(kasFormSchema, {
-      type: type as 'Masuk' | 'Keluar',
-      amount: nominal,
-      category,
-      message: message.trim() || `Transaksi ${type} ${category}`
-    });
-
-    if (!validRes.success) {
-      showNotification(validRes.error, 'error');
+    // Optimistic Update
+    const nominal = parseInt(amount.replace(/\D/g, '') || '0');
+    if (!nominal || nominal <= 0) {
+      showNotification('Nominal transaksi harus lebih dari Rp 0.', 'error');
       return;
     }
 
-    setIsSubmitting(true);
     const tempId = 'temp-' + Date.now();
     const newEntry = {
       id: tempId,
@@ -218,8 +207,6 @@ export const MobileKas = ({ onBack, currentUser }: { onBack: () => void, current
       fetchData();
       fetchAllKasHistory();
       showNotification('Gagal menyimpan transaksi kas ke server.', 'error');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

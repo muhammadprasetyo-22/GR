@@ -25,12 +25,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api",
-      "destination": "/api/index.ts"
-    },
-    {
       "source": "/api/(.*)",
-      "destination": "/api/index.ts"
+      "destination": "/api"
     },
     {
       "source": "/((?!api/|assets/|.*\\.[a-zA-Z0-9]+$).*)",

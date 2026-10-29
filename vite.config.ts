@@ -36,36 +36,6 @@ export default defineConfig(({ mode }) => {
                 cacheName: "firebase-api",
               },
             },
-            {
-              urlPattern: /\/api\/(kas|iuran|surat|dashboard)/i,
-              handler: "NetworkFirst",
-              options: {
-                cacheName: "transactional-api",
-                networkTimeoutSeconds: 3,
-                expiration: {
-                  maxEntries: 50,
-                  maxAgeSeconds: 24 * 60 * 60,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-            {
-              urlPattern: /\/api\/.*/i,
-              handler: "NetworkFirst",
-              options: {
-                cacheName: "general-api",
-                networkTimeoutSeconds: 5,
-                expiration: {
-                  maxEntries: 100,
-                  maxAgeSeconds: 24 * 60 * 60,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
           ],
         },
         manifest: {

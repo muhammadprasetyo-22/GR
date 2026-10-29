@@ -1,7 +1,6 @@
 import { apiFetch } from './apiInterceptor';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { iuranFormSchema, validateForm } from './utils/formValidation';
 
 // --- Kumpulan Ikon ---
 const Icons = {
@@ -185,36 +184,22 @@ export const MobileIuran = ({ onBack, currentUser }: { onBack: () => void, curre
     }
   };
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const submitPembayaran = async () => {
-    if (isSubmitting) return;
     
     if (!buktiBase64) {
-      alert('Harap unggah foto bukti transfer/pembayaran terlebih dahulu.');
-      return;
-    }
-
-    const parsedNominal = parseInt(String(nominal).replace(/\D/g, '') || '0', 10);
-    const validRes = validateForm(iuranFormSchema, {
-      nama: currentUser?.nama || 'Warga',
-      nominal: parsedNominal,
-      jenis: jenisIuran
-    });
-
-    if (!validRes.success) {
-      alert(validRes.error);
+      console.log('Harap unggah bukti pembayaran terlebih dahulu.');
       return;
     }
     
-    setIsSubmitting(true);
+    // Optimistic Update
     const period = `${bulan} ${tahun}`;
+    // Cek tagihan yang belum dibayar di periode dan jenis yang sama
     const existing = tagihanList.find(t => t.bulan === period && (t.jenis || 'Iuran Wajib') === jenisIuran);
     
     const tempId = existing ? existing.id : 'temp-bayar-' + Date.now();
     const newDataRow = {
        id: tempId,
-       nominal: parsedNominal,
+       nominal: nominal,
        bulan: period,
        jenis: jenisIuran,
        status: 'menunggu',
@@ -238,18 +223,17 @@ export const MobileIuran = ({ onBack, currentUser }: { onBack: () => void, curre
         await apiFetch(`/api/data/iuran/${existing.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nominal: parsedNominal, status: 'menunggu', buktiUrl: buktiBase64 })
+          body: JSON.stringify({ nominal, status: 'menunggu', buktiUrl: buktiBase64 })
         });
       } else {
         await apiFetch('/api/data/iuran', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nominal: parsedNominal, bulan: period, jenis: jenisIuran, status: 'menunggu', userId: currentUser?.id, nama: currentUser?.nama, buktiUrl: buktiBase64 })
+          body: JSON.stringify({ nominal, bulan: period, jenis: jenisIuran, status: 'menunggu', userId: currentUser?.id, nama: currentUser?.nama, buktiUrl: buktiBase64 })
         });
       }
       fetchData();
     } catch(e) { console.error(e); fetchData(); }
-    finally { setIsSubmitting(false); }
   };
 
   const handleTambahAdmin = async (e: React.FormEvent) => {

@@ -5,68 +5,20 @@
       "description": "A registered user/warga of the application.",
       "type": "object",
       "properties": {
-        "nik": { "type": "string", "minLength": 16, "maxLength": 16 },
-        "username": { "type": "string", "minLength": 3, "maxLength": 50 },
-        "nama": { "type": "string", "minLength": 2, "maxLength": 100 },
-        "alamat": { "type": "string", "maxLength": 200 },
-        "noHp": { "type": "string", "maxLength": 20 },
+        "username": { "type": "string" },
+        "nama": { "type": "string" },
+        "alamat": { "type": "string" },
+        "noHp": { "type": "string" },
         "status": { "type": "string" },
         "umur": { "type": "number", "minimum": 0 },
-        "role": { "type": "string", "enum": ["warga", "admin", "bendahara", "sekretaris", "pengurus", "developer"] },
-        "rtId": { "type": "string" },
-        "isApproved": { "type": "boolean" },
+        "role": { "type": "string", "enum": ["warga", "admin", "bendahara"] },
         "members": {
           "type": "array",
           "items": { "type": "object" }
         },
         "photo": { "type": "string" }
       },
-      "required": ["username", "nama", "role", "rtId"]
-    },
-    "KasTransaction": {
-      "title": "Kas Transaction",
-      "description": "Financial entry in RT cash ledger",
-      "type": "object",
-      "properties": {
-        "type": { "type": "string", "enum": ["Masuk", "Keluar"] },
-        "amount": { "type": "number", "minimum": 0 },
-        "name": { "type": "string" },
-        "message": { "type": "string" },
-        "category": { "type": "string" },
-        "rtId": { "type": "string" },
-        "createdAt": { "type": "string" }
-      },
-      "required": ["type", "amount", "name", "category", "rtId"]
-    },
-    "IuranRecord": {
-      "title": "Iuran Record",
-      "description": "Warga dues entry",
-      "type": "object",
-      "properties": {
-        "nama": { "type": "string" },
-        "nominal": { "type": "number", "minimum": 0 },
-        "jenis": { "type": "string" },
-        "status": { "type": "string", "enum": ["verifikasi", "lunas", "butuh_konfirmasi"] },
-        "rtId": { "type": "string" },
-        "userId": { "type": "string" },
-        "bulan": { "type": "string" }
-      },
-      "required": ["nama", "nominal", "status", "rtId"]
-    },
-    "SuratRequest": {
-      "title": "Surat Request",
-      "description": "Surat pengantar request from warga",
-      "type": "object",
-      "properties": {
-        "jenis": { "type": "string" },
-        "keperluan": { "type": "string" },
-        "status": { "type": "string" },
-        "userId": { "type": "string" },
-        "userName": { "type": "string" },
-        "rtId": { "type": "string" },
-        "createdAt": { "type": "string" }
-      },
-      "required": ["jenis", "status", "userId", "rtId"]
+      "required": ["username", "nama", "role"]
     },
     "Notification": {
       "title": "Notification",
@@ -77,17 +29,15 @@
         "message": { "type": "string" },
         "time": { "type": "string" },
         "read": { "type": "boolean" },
-        "rtId": { "type": "string" }
+        "toUserId": { "type": "string" }
       },
       "required": ["title", "message", "time"]
     },
     "AppResource": {
       "title": "App Resource",
-      "description": "Generic resource for laporan, acara, umkm, darurat, media, dokumen",
+      "description": "Generic resource for surat, laporan, acara, umkm, kas, iuran, darurat, media",
       "type": "object",
       "properties": {
-        "title": { "type": "string" },
-        "rtId": { "type": "string" },
         "createdAt": { "type": "string" }
       }
     }
@@ -95,30 +45,19 @@
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
-      "description": "Stores user profiles with sensitive fields protected by RBAC."
+      "description": "Stores user profiles."
     },
-    "/kas/{docId}": {
-      "schema": { "$ref": "#/entities/KasTransaction" },
-      "description": "Kas entries managed by Bendahara / Admin."
-    },
-    "/iuran/{docId}": {
-      "schema": { "$ref": "#/entities/IuranRecord" },
-      "description": "Iuran entries managed by Bendahara / Admin."
-    },
-    "/surat/{docId}": {
-      "schema": { "$ref": "#/entities/SuratRequest" },
-      "description": "Surat pengantar requests created by warga and approved by Pengurus / RT."
-    },
-    "/laporan/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Laporan warga" },
-    "/acara/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Acara kegiatan" },
-    "/umkm/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "UMKM warga" },
-    "/darurat/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Kontak darurat" },
-    "/media/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Media uploads" },
-    "/dokumen/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Dokumen warga" },
-    "/voting/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Sesi voting warga" },
     "/notifications/{notificationId}": {
       "schema": { "$ref": "#/entities/Notification" },
       "description": "Notifications."
-    }
+    },
+    "/surat/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Surat requests" },
+    "/laporan/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Laporan warga" },
+    "/acara/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Acara kegiatan" },
+    "/umkm/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "UMKM warga" },
+    "/kas/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Kas entries" },
+    "/iuran/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Iuran entries" },
+    "/darurat/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Kontak darurat" },
+    "/media/{docId}": { "schema": { "$ref": "#/entities/AppResource" }, "description": "Media uploads" }
   }
 }

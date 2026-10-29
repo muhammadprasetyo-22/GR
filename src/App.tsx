@@ -2312,8 +2312,8 @@ const MobileBottomNav = ({ activeTab, onTabChange, user }: { activeTab: string, 
       initial={{ y: 50 }} 
       animate={{ y: 0 }} 
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      // Efek glassmorphism tebal dengan dukungan gesture bar safe-area layar HP modern
-      className="flex justify-around items-center px-1 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-xl border-t border-gray-100/50 fixed bottom-0 left-0 right-0 z-50 w-full shadow-[0_-10px_40px_rgba(0,0,0,0.05)]"
+      // Efek glassmorphism tebal di bagian bawah
+      className="flex justify-around items-center px-1 py-2 pb-6 bg-white/90 backdrop-blur-xl border-t border-gray-100/50 fixed bottom-0 left-0 right-0 z-50 w-full shadow-[0_-10px_40px_rgba(0,0,0,0.05)]"
     >
       {navItems.map((item) => {
         const isActive = activeTab === item.name;
@@ -5021,7 +5021,7 @@ function MainApp({ user: originalUser, onLogout, onUpdateUser }: { user: any; on
               animate={{ opacity: 1, x: 0, y: 0 }}
               exit={activeMobileTab === 'Profil' ? { opacity: 0, y: "100%" } : { opacity: 0, x: -20 }}
               transition={{ duration: 0.15, ease: "easeOut" }}
-              className="h-full overflow-y-auto pb-[max(7rem,calc(6rem+env(safe-area-inset-bottom)))] relative"
+              className="h-full overflow-y-auto pb-24 relative"
             >
               {activeMobileTab === 'Profil' ? (
                 <MobileProfilPage user={user} onLogout={onLogout} onUpdateUser={onUpdateUser} />

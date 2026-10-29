@@ -15,9 +15,10 @@ import crypto from "crypto";
 dotenv.config();
 
 const rawJwtSecret = process.env.JWT_SECRET;
-const JWT_SECRET = (rawJwtSecret && rawJwtSecret.length >= 16)
-  ? rawJwtSecret
-  : "guyubrukun_vercelsafe_production_jwt_secret_key_2026_secured";
+if (process.env.NODE_ENV === "production" && (!rawJwtSecret || rawJwtSecret.length < 24)) {
+  throw new Error("[Security Fatal] Strong JWT_SECRET (min 24 chars) is required in production environment.");
+}
+const JWT_SECRET = rawJwtSecret || "guyubrukun_dev_only_jwt_secret_key_2026_secured";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/guyubrukun";
 let isDbConnected = false;
@@ -28,7 +29,7 @@ function isValidGeminiApiKey(key?: string): boolean {
   return k.length >= 20 && !k.startsWith('MY_') && !k.startsWith('YOUR_') && !k.includes('placeholder');
 }
 
-import { connectDB as connectCachedDB } from "./src/db/db";
+import { connectDB as connectCachedDB } from "./src/db/db.js";
 
 async function connectDB() {
   await connectCachedDB();
@@ -86,24 +87,6 @@ app.use(cookieParser());
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ limit: "15mb", extended: true }));
 
-// CORS & Preflight middleware for Vercel & cross-origin deployment compatibility
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept, Authorization, x-rt-id, x-user-id, x-user-role, x-user-username, x-user-nama');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
-
 // Vercel Serverless rewrite support: map /api?__route=..., [...slug], or x-matched-path back to /api/...
 app.use((req, res, next) => {
   const matchedPath = (req.headers['x-matched-path'] || req.headers['x-vercel-matched-path']) as string | undefined;
@@ -130,22 +113,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Global DB connection middleware for APIs & Auth routes with Auto-Seed support on Vercel
+// Global DB connection middleware for APIs to ensure stable connection on serverless/cold-start
 app.use(async (req, res, next) => {
-  const isApiOrAuthRoute = req.path.startsWith("/api/") || req.url.startsWith("/api/") || req.path === "/login" || req.path === "/register";
-  if (isApiOrAuthRoute) {
+  if (req.path.startsWith("/api/") || req.url.startsWith("/api/")) {
     try {
       await connectDB();
-      await ensureDbSeeded();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Database connection failed in middleware:", err);
-      if (req.path.includes('login') || req.path.includes('register')) {
-        if (!process.env.MONGODB_URI) {
-          return res.status(500).json({
-            error: "MONGODB_URI belum dikonfigurasi di Vercel Environment Variables. Harap buka Vercel Project Settings > Environment Variables dan tambahkan MONGODB_URI."
-          });
-        }
-      }
       return res.status(500).json({ error: "Gagal menghubungkan ke database guyubrukun" });
     }
   }
@@ -153,9 +127,9 @@ app.use(async (req, res, next) => {
 });
 
 // Apply rate limiting to auth routes specifically
-app.use(["/api/auth/", "/auth/"], authLimiter);
-app.use(["/api/login", "/login"], authLimiter);
-app.use(["/api/register", "/register"], authLimiter);
+app.use("/api/auth/", authLimiter);
+app.use("/api/login", authLimiter);
+app.use("/api/register", authLimiter);
 
 // ==========================================
 // CENTRAL AUTHORIZED RT CONTEXT & HELPERS
@@ -318,24 +292,23 @@ export async function checkTenantSubscription(req: express.Request, res: express
 // Auth Verification Middleware - Secure Session Cookie & Bearer Token with DB Check
 async function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
   const publicRoutes = [
-    "/api/login", "/login",
-    "/api/register", "/register",
-    "/api/auth/login", "/auth/login",
-    "/api/auth/register", "/auth/register",
-    "/api/health", "/health",
-    "/api/public/rt-list", "/public/rt-list",
-    "/api/public/beranda-summary", "/public/beranda-summary",
-    "/api/dashboard/summary", "/dashboard/summary",
-    "/api/public/check-house-availability", "/public/check-house-availability",
-    "/api/public/registered-houses", "/public/registered-houses",
+    "/api/login",
+    "/api/register",
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/health",
+    "/api/public/rt-list",
+    "/api/public/beranda-summary",
+    "/api/dashboard/summary",
+    "/api/public/check-house-availability",
+    "/api/public/registered-houses",
   ];
   
   const pathName = req.path;
-  if (
-    publicRoutes.includes(pathName) ||
-    pathName.startsWith("/api/tangerang-logo-proxy") ||
-    pathName.startsWith("/tangerang-logo-proxy")
-  ) {
+  if (!pathName.startsWith("/api/")) {
+    return next();
+  }
+  if (publicRoutes.includes(pathName) || pathName.startsWith("/api/tangerang-logo-proxy")) {
     return next();
   }
   
@@ -422,14 +395,6 @@ const UserSchema = new mongoose.Schema({
   }],
   photo: String,
   noKk: { type: String },
-  alamatKk: { type: String, default: '' },
-  wilayahKk: { type: String, default: '' },
-  kkCategory: { type: String, default: '' },
-  kkKecamatan: { type: String, default: '' },
-  kkKelurahan: { type: String, default: '' },
-  kkKabupatenKota: { type: String, default: '' },
-  kkProvinsi: { type: String, default: '' },
-  kkVerifiedByAdmin: { type: Boolean, default: false },
   dokumenKk: { type: mongoose.Schema.Types.Mixed, select: false },
   dokumenKtp: { type: mongoose.Schema.Types.Mixed, select: false },
   hasChangedUsername: { type: Boolean, default: false },
@@ -1457,78 +1422,21 @@ async function initDb(rtId: string = '') {
         await a03.save();
       }
 
-      // Backfill existing users with noKk & wilayahKk from uploaded Kartu Keluarga documents
-      const targetNamesMap: Record<string, { noKk: string; wilayahKk: string; alamatKk: string }> = {
-        'fajri': { noKk: '3603121508200004', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'fajri hidayatullah': { noKk: '3603121508200004', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'solikin': { noKk: '3603121804190006', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'nur iman': { noKk: '3603121102210002', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'suharja': { noKk: '3603120509180002', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'dedi': { noKk: '3603122203170003', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'dedi rosadi': { noKk: '3603122203170003', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'intiastuti': { noKk: '3603121406160002', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'edi prasetyo': { noKk: '3603121011150010', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'mala': { noKk: '3603122501140012', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'mala widiyanto': { noKk: '3603122501140012', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Pasar Kemis, Kab. Tangerang' },
-        'mhd arie setiyawan': { noKk: '3603172101210011', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Kec. Sindang Jaya, Kab. Tangerang' },
-        'arie setiyawan': { noKk: '3603172101210011', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Kec. Sindang Jaya, Kab. Tangerang' },
-        'e17': { noKk: '3603172101210011', wilayahKk: 'Kabupaten Tangerang', alamatKk: 'Kec. Sindang Jaya, Kab. Tangerang' }
-      };
-
-      const allRtUsers = await UserModel.find({ rtId: rtId || 'rt01' }).select('+dokumenKk');
-      for (const u of allRtUsers) {
-        const uKey = String(u.username || '').toLowerCase().trim();
-        const nKey = String(u.nama || '').toLowerCase().trim();
-        const matched = targetNamesMap[uKey] || targetNamesMap[nKey];
-        
-        let isModified = false;
-        if (matched) {
-          if (u.noKk !== matched.noKk) { u.noKk = matched.noKk; isModified = true; }
-          if (u.wilayahKk !== matched.wilayahKk) { u.wilayahKk = matched.wilayahKk; isModified = true; }
-          if (u.alamatKk !== matched.alamatKk) { u.alamatKk = matched.alamatKk; isModified = true; }
-        } else if (u.dokumenKk) {
-          if (!u.noKk || String(u.noKk).trim() === '') {
-            const extractedNo = extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama);
-            if (extractedNo) { u.noKk = extractedNo; isModified = true; }
+      // Backfill existing users with noKk extracted from their uploaded dokumenKk
+      const usersToBackfill = await UserModel.find({ rtId: rtId || 'rt01', dokumenKk: { $exists: true, $nin: ['', null] } }).select('+dokumenKk');
+      for (const u of usersToBackfill) {
+        if (!u.noKk || String(u.noKk).trim() === '') {
+          const extractedNo = extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama);
+          if (extractedNo) {
+            u.noKk = extractedNo;
+            await u.save();
           }
-          const regInfo = identifyKkRegion({
-            noKk: u.noKk,
-            alamatKk: u.alamatKk,
-            alamat: u.alamat,
-            dokumenKk: String(u.dokumenKk),
-            wilayahKk: u.wilayahKk,
-            nama: u.nama,
-            username: u.username
-          });
-          if (u.wilayahKk !== regInfo.category) { u.wilayahKk = regInfo.category; isModified = true; }
-          if (!u.alamatKk && regInfo.detailAlamat) { u.alamatKk = regInfo.detailAlamat; isModified = true; }
-        }
-
-        if (isModified) {
-          await u.save();
         }
       }
     }
 
   } catch (e: any) {
     console.error("DB Initialization Error:", e);
-  }
-}
-
-let isDbSeededGlobal = false;
-export async function ensureDbSeeded() {
-  if (isDbSeededGlobal) return;
-  try {
-    const adminUser = await UserModel.findOne({ role: 'admin' });
-    if (!adminUser) {
-      console.log("[Auto-Seed] No admin user found. Initializing default RT accounts...");
-      await initDb('rt01');
-      await initDb('rt02');
-      await initDb('rt03');
-    }
-    isDbSeededGlobal = true;
-  } catch (err) {
-    console.warn("[Auto-Seed Warning]", err);
   }
 }
 
@@ -1691,24 +1599,12 @@ const VERIFIED_KK_BY_USER: Record<string, string> = {
   'muhammad nurmanto': '3603122309220010',
   'e17': '3603172101210011',
   'mhd arie setiyawan': '3603172101210011',
-  'arie setiyawan': '3603172101210011',
   'f04': '3603122010200011',
   'budi saputra': '3603122010200011',
   'f06': '3671070410070650',
   'waluyo': '3671070410070650',
   'f24': '3603121407140001',
   'ilham': '3603121407140001',
-  'fajri': '3603121508200004',
-  'fajri hidayatullah': '3603121508200004',
-  'solikin': '3603121804190006',
-  'nur iman': '3603121102210002',
-  'suharja': '3603120509180002',
-  'dedi': '3603122203170003',
-  'dedi rosadi': '3603122203170003',
-  'intiastuti': '3603121406160002',
-  'edi prasetyo': '3603121011150010',
-  'mala': '3603122501140012',
-  'mala widiyanto': '3603122501140012',
   'a01': '3603120101200001',
   'a03': '3603120301200002'
 };
@@ -1729,344 +1625,6 @@ function cleanOcrKkDigits(raw: string): string | null {
     return normalized.slice(0, 16);
   }
   return null;
-}
-
-// Kamus 29 Kecamatan di Kabupaten Tangerang
-export const KECAMATAN_KAB_TANGERANG = [
-  'BALARAJA', 'CIKUPA', 'CISAK', 'CISAUK', 'CISOKA', 'CURUG', 'GUNUNG KALER',
-  'JAMBE', 'JAYANTI', 'KELAPA DUA', 'KEMIRI', 'KRESEK', 'KRONJO', 'LEGOK',
-  'MAUK', 'MEKAR BARU', 'PAGEDANGAN', 'PAKUHAJI', 'PANONGAN', 'PASAR KEMIS',
-  'PASARKEMIS', 'RAJEG', 'SEPATAN', 'SEPATAN TIMUR', 'SINDANG JAYA', 'SOLEAR',
-  'SUKADIRI', 'SUKAMULYA', 'TELUKNAGA', 'TIGARAKSA', 'KOSAMBI'
-];
-
-// Kelurahan/Desa populer di Kabupaten Tangerang
-export const KELURAHAN_KAB_TANGERANG = [
-  'KUTABUMI', 'KUTA BUMI', 'KUTA BARU', 'KUTABARU', 'SUKAMANTRI', 'GELAM JAYA',
-  'PASAR KEMIS', 'SUKA ASIH', 'PANGADEGAN', 'BITUNG JAYA', 'KADU', 'KADU JAYA',
-  'BOJONG NANGKA', 'BENCONGAN', 'BENCONGAN INDAH', 'CURUG KULON', 'CURUG WETAN',
-  'MEDANG', 'SAMPORA', 'SURADITA', 'CIBOGO', 'SITUGADUNG', 'SINDANG ASIH',
-  'SINDANG PANON', 'SUKAHARJA', 'RANCA IYAH', 'PASIR GADUNG', 'TALAGA', 'TOBAT',
-  'SUKATANI', 'KEDUNG DALEM', 'KOSAMBI TIMUR', 'SALEMBARAN', 'DADAP'
-];
-
-// Kamus 13 Kecamatan di Kota Tangerang
-export const KECAMATAN_KOTA_TANGERANG = [
-  'BATUCEPER', 'BENDA', 'CIBODAS', 'CILEDUG', 'CIPONDOH', 'JATIUWUNG',
-  'KARANG TENGAH', 'KARANGTENGAH', 'KARAWACI', 'LARANGAN', 'NEGLASARI',
-  'PERIUK', 'PINANG', 'TANGERANG'
-];
-
-// Kelurahan di Kota Tangerang
-export const KELURAHAN_KOTA_TANGERANG = [
-  'PORIS GAGA', 'PORIS PLAWAD', 'PORIS JAYA', 'SUDIMARA', 'PANINGGILAN',
-  'GEBANG RAYA', 'PERIUK JAYA', 'UWUNG JAYA', 'GANDASARI', 'MANIS JAYA',
-  'PASIR JAYA', 'CIMONE', 'CIMONE JAYA', 'PABUARAN', 'KOANG JAYA', 'NUSA JAYA',
-  'BUGEL', 'GERENDENG', 'MARGASARI', 'SANGIANG JAYA', 'SUKAJADI', 'BELENDUNG',
-  'JURUMUDI', 'PAJANG', 'KUNCIRAN', 'NEROGTOG', 'PAKUJAN', 'CIPETE', 'BABAKAN',
-  'SUKASARI', 'TANAH TINGGI', 'BUARAN INDAH', 'CIKOKOL', 'PETIR', 'GONDRONG', 'KETAPANG'
-];
-
-// Kecamatan di Kota Tangerang Selatan (Tangsel)
-export const KECAMATAN_TANGSEL = [
-  'CIPUTAT', 'CIPUTAT TIMUR', 'PAMULANG', 'PONDOK AREN', 'SERPONG', 'SERPONG UTARA', 'SETU'
-];
-
-// Ekstraksi field alamat dari teks mentah dokumen KK
-export function extractKkAddressFields(text: string): {
-  desaKelurahan?: string;
-  kecamatan?: string;
-  kabupatenKota?: string;
-  provinsi?: string;
-  alamatLengkap?: string;
-} {
-  const result: {
-    desaKelurahan?: string;
-    kecamatan?: string;
-    kabupatenKota?: string;
-    provinsi?: string;
-    alamatLengkap?: string;
-  } = {};
-  if (!text) return result;
-
-  const clean = text.replace(/&amp;/g, '&').replace(/<[^>]+>/g, ' ');
-
-  // 1. Desa/Kelurahan
-  const desaMatch = clean.match(/(?:Desa\/Kelurahan|Kelurahan\/Desa|Desa|Kelurahan)\s*[:.]?\s*([A-Za-z0-9\s.'-]+?)(?=\s*(?:Kecamatan|RT\/RW|Kode Pos|Kabupaten|$|\n|\r))/i);
-  if (desaMatch && desaMatch[1]) {
-    result.desaKelurahan = desaMatch[1].trim();
-  }
-
-  // 2. Kecamatan
-  const kecMatch = clean.match(/(?:Kecamatan|Kec\.)\s*[:.]?\s*([A-Za-z0-9\s.'-]+?)(?=\s*(?:Kabupaten|Kota|Provinsi|Kode Pos|$|\n|\r))/i);
-  if (kecMatch && kecMatch[1]) {
-    result.kecamatan = kecMatch[1].trim();
-  }
-
-  // 3. Kabupaten / Kota
-  const kabKotaMatch = clean.match(/(?:Kabupaten\/Kota|Kabupaten|Kota|Kab\/Kota)\s*[:.]?\s*([A-Za-z0-9\s.'-]+?)(?=\s*(?:Provinsi|Kode Pos|Kodepos|$|\n|\r))/i);
-  if (kabKotaMatch && kabKotaMatch[1]) {
-    result.kabupatenKota = kabKotaMatch[1].trim();
-  }
-
-  // 4. Provinsi
-  const provMatch = clean.match(/Provinsi\s*[:.]?\s*([A-Za-z0-9\s.'-]+?)(?=\s*(?:Kode Pos|Kodepos|No\.?\s*KK|$|\n|\r))/i);
-  if (provMatch && provMatch[1]) {
-    result.provinsi = provMatch[1].trim();
-  }
-
-  // 5. Alamat Jalan / RT / RW
-  const alamatMatch = clean.match(/Alamat\s*[:.]?\s*([A-Za-z0-9\s.,'/-]+?)(?=\s*(?:RT\/RW|Desa|Kelurahan|$|\n|\r))/i);
-  if (alamatMatch && alamatMatch[1]) {
-    result.alamatLengkap = alamatMatch[1].trim();
-  }
-
-  return result;
-}
-
-// Helper cerdas penentu kategori wilayah KK: Kabupaten Tangerang, Kota Tangerang, atau Luar Kota Tangerang
-export function identifyKkRegion(params: {
-  noKk?: string;
-  alamatKk?: string;
-  alamat?: string;
-  dokumenKk?: string;
-  wilayahKk?: string;
-  kkCategory?: string;
-  kkKecamatan?: string;
-  kkKelurahan?: string;
-  kkKabupatenKota?: string;
-  kkProvinsi?: string;
-  nama?: string;
-  username?: string;
-  verifiedByAdmin?: boolean;
-}): {
-  category: 'Kabupaten Tangerang' | 'Kota Tangerang' | 'Luar Kota Tangerang';
-  label: string;
-  source: 'manual' | 'kecamatan' | 'kelurahan' | 'noKk' | 'text' | 'default';
-  detailAlamat: string;
-  kecamatan?: string;
-  kelurahan?: string;
-  kabupatenKota?: string;
-  provinsi?: string;
-  alamatLengkap?: string;
-} {
-  // Jika sudah diverifikasi atau diubah secara manual oleh Pengurus RT
-  const currentCategory = params.kkCategory || params.wilayahKk;
-  if (params.verifiedByAdmin && currentCategory && ['Kabupaten Tangerang', 'Kota Tangerang', 'Luar Kota Tangerang'].includes(currentCategory)) {
-    return {
-      category: currentCategory as any,
-      label: currentCategory,
-      source: 'manual',
-      detailAlamat: params.alamatKk || currentCategory,
-      kecamatan: params.kkKecamatan || '',
-      kelurahan: params.kkKelurahan || '',
-      kabupatenKota: params.kkKabupatenKota || currentCategory,
-      provinsi: params.kkProvinsi || 'BANTEN',
-      alamatLengkap: params.alamatKk || ''
-    };
-  }
-
-  // Parse teks dokumen KK jika ada (terutama jika berupa SVG / teks)
-  let parsedFromDoc: any = {};
-  if (params.dokumenKk && typeof params.dokumenKk === 'string') {
-    if (params.dokumenKk.startsWith('data:image/svg+xml') || params.dokumenKk.includes('<svg')) {
-      const base64Part = params.dokumenKk.split(',')[1] || '';
-      try {
-        const svgContent = params.dokumenKk.includes(';base64,')
-          ? Buffer.from(base64Part, 'base64').toString('utf-8')
-          : decodeURIComponent(base64Part);
-        parsedFromDoc = extractKkAddressFields(svgContent);
-      } catch {}
-    } else if (!params.dokumenKk.startsWith('data:image/')) {
-      parsedFromDoc = extractKkAddressFields(params.dokumenKk);
-    }
-  }
-
-  const rawKecamatan = (parsedFromDoc.kecamatan || params.kkKecamatan || '').trim();
-  const rawKelurahan = (parsedFromDoc.desaKelurahan || params.kkKelurahan || '').trim();
-  const rawKabKota = (parsedFromDoc.kabupatenKota || params.kkKabupatenKota || '').trim();
-  const rawProvinsi = (parsedFromDoc.provinsi || params.kkProvinsi || '').trim();
-  const cleanNoKk = (params.noKk || '').replace(/\D/g, '');
-  const prefix4 = cleanNoKk.slice(0, 4);
-
-  const upperKec = rawKecamatan.toUpperCase();
-  const upperKel = rawKelurahan.toUpperCase();
-  const upperKabKota = rawKabKota.toUpperCase();
-  const rawAggregate = `${upperKec} ${upperKel} ${upperKabKota} ${rawProvinsi} ${params.alamatKk || ''} ${params.alamat || ''}`.toUpperCase();
-
-  // Helper pembentuk detail alamat ringkas
-  const makeDetailAlamat = (cat: string, sub?: string, vill?: string) => {
-    const parts: string[] = [];
-    if (vill) parts.push(`Desa/Kel. ${vill}`);
-    if (sub) parts.push(`Kec. ${sub}`);
-    parts.push(cat);
-    return parts.join(', ');
-  };
-
-  // 1. Pencocokan Cerdas Kecamatan Kabupaten Tangerang (29 Kecamatan)
-  if (upperKec && KECAMATAN_KAB_TANGERANG.some(k => upperKec === k || upperKec.includes(k))) {
-    const matchedKec = KECAMATAN_KAB_TANGERANG.find(k => upperKec === k || upperKec.includes(k)) || rawKecamatan;
-    return {
-      category: 'Kabupaten Tangerang',
-      label: 'Kabupaten Tangerang',
-      source: 'kecamatan',
-      detailAlamat: makeDetailAlamat('Kabupaten Tangerang', matchedKec, rawKelurahan),
-      kecamatan: matchedKec,
-      kelurahan: rawKelurahan || '',
-      kabupatenKota: 'Kabupaten Tangerang',
-      provinsi: rawProvinsi || 'BANTEN'
-    };
-  }
-
-  // 2. Pencocokan Cerdas Kelurahan/Desa Kabupaten Tangerang (termasuk Kutabumi, Kuta Baru, Sukamantri, Gelam Jaya, dll.)
-  if (upperKel && KELURAHAN_KAB_TANGERANG.some(k => upperKel === k || upperKel.includes(k))) {
-    const matchedKel = KELURAHAN_KAB_TANGERANG.find(k => upperKel === k || upperKel.includes(k)) || rawKelurahan;
-    const inferredKec = matchedKel.includes('KUTA') ? 'Pasar Kemis' : rawKecamatan;
-    return {
-      category: 'Kabupaten Tangerang',
-      label: 'Kabupaten Tangerang',
-      source: 'kelurahan',
-      detailAlamat: makeDetailAlamat('Kabupaten Tangerang', inferredKec, matchedKel),
-      kecamatan: inferredKec || 'Pasar Kemis',
-      kelurahan: matchedKel,
-      kabupatenKota: 'Kabupaten Tangerang',
-      provinsi: rawProvinsi || 'BANTEN'
-    };
-  }
-
-  // 3. Pencocokan Cerdas Kecamatan Kota Tangerang (13 Kecamatan)
-  if (upperKec && KECAMATAN_KOTA_TANGERANG.some(k => upperKec === k || upperKec.includes(k))) {
-    const matchedKec = KECAMATAN_KOTA_TANGERANG.find(k => upperKec === k || upperKec.includes(k)) || rawKecamatan;
-    return {
-      category: 'Kota Tangerang',
-      label: 'Kota Tangerang',
-      source: 'kecamatan',
-      detailAlamat: makeDetailAlamat('Kota Tangerang', matchedKec, rawKelurahan),
-      kecamatan: matchedKec,
-      kelurahan: rawKelurahan || '',
-      kabupatenKota: 'Kota Tangerang',
-      provinsi: rawProvinsi || 'BANTEN'
-    };
-  }
-
-  // 4. Pencocokan Cerdas Kelurahan Kota Tangerang
-  if (upperKel && KELURAHAN_KOTA_TANGERANG.some(k => upperKel === k || upperKel.includes(k))) {
-    const matchedKel = KELURAHAN_KOTA_TANGERANG.find(k => upperKel === k || upperKel.includes(k)) || rawKelurahan;
-    return {
-      category: 'Kota Tangerang',
-      label: 'Kota Tangerang',
-      source: 'kelurahan',
-      detailAlamat: makeDetailAlamat('Kota Tangerang', rawKecamatan, matchedKel),
-      kecamatan: rawKecamatan || 'Kota Tangerang',
-      kelurahan: matchedKel,
-      kabupatenKota: 'Kota Tangerang',
-      provinsi: rawProvinsi || 'BANTEN'
-    };
-  }
-
-  // 5. Cek Kecamatan Tangsel & Wilayah Luar Tangerang
-  if (
-    (upperKec && KECAMATAN_TANGSEL.some(k => upperKec === k || upperKec.includes(k))) ||
-    rawAggregate.includes('TANGERANG SELATAN') ||
-    rawAggregate.includes('TANGSEL') ||
-    rawAggregate.includes('JAKARTA') ||
-    rawAggregate.includes('BEKASI') ||
-    rawAggregate.includes('BOGOR') ||
-    rawAggregate.includes('DEPOK') ||
-    rawAggregate.includes('BANDUNG') ||
-    rawAggregate.includes('SERANG') ||
-    rawAggregate.includes('LAMPUNG') ||
-    rawAggregate.includes('WONOGIRI') ||
-    rawAggregate.includes('JAWA')
-  ) {
-    return {
-      category: 'Luar Kota Tangerang',
-      label: 'Luar Kota Tangerang',
-      source: 'text',
-      detailAlamat: params.alamatKk || (rawKabKota ? `${rawKabKota}, ${rawProvinsi || 'Indonesia'}` : 'Luar Kota Tangerang'),
-      kecamatan: rawKecamatan,
-      kelurahan: rawKelurahan,
-      kabupatenKota: rawKabKota || 'Luar Kota Tangerang',
-      provinsi: rawProvinsi
-    };
-  }
-
-  // 6. Validasi Silang dengan Kode 4 Digit Awal Nomor KK (Dukcapil Indonesia)
-  if (prefix4.length === 4) {
-    if (prefix4 === '3603') {
-      return {
-        category: 'Kabupaten Tangerang',
-        label: 'Kabupaten Tangerang',
-        source: 'noKk',
-        detailAlamat: makeDetailAlamat('Kabupaten Tangerang', rawKecamatan || 'Pasar Kemis', rawKelurahan),
-        kecamatan: rawKecamatan || 'Pasar Kemis',
-        kelurahan: rawKelurahan,
-        kabupatenKota: 'Kabupaten Tangerang',
-        provinsi: rawProvinsi || 'BANTEN'
-      };
-    }
-    if (prefix4 === '3671') {
-      return {
-        category: 'Kota Tangerang',
-        label: 'Kota Tangerang',
-        source: 'noKk',
-        detailAlamat: makeDetailAlamat('Kota Tangerang', rawKecamatan, rawKelurahan),
-        kecamatan: rawKecamatan,
-        kelurahan: rawKelurahan,
-        kabupatenKota: 'Kota Tangerang',
-        provinsi: rawProvinsi || 'BANTEN'
-      };
-    }
-    // Kode Dukcapil di luar 3603 dan 3671 (misal 3674 Tangsel, 31xx Jakarta, 32xx Jabar, 33xx Jateng, dll.)
-    return {
-      category: 'Luar Kota Tangerang',
-      label: 'Luar Kota Tangerang',
-      source: 'noKk',
-      detailAlamat: params.alamatKk || `Luar Kota Tangerang (Kode: ${prefix4})`,
-      kecamatan: rawKecamatan,
-      kelurahan: rawKelurahan,
-      kabupatenKota: rawKabKota || `Wilayah Kode ${prefix4}`,
-      provinsi: rawProvinsi
-    };
-  }
-
-  // 7. Fallback Berdasarkan Frasa Header "KABUPATEN TANGERANG" atau "KOTA TANGERANG"
-  if (upperKabKota.includes('KABUPATEN') || upperKabKota.includes('KAB.') || rawAggregate.includes('KABUPATEN TANGERANG')) {
-    return {
-      category: 'Kabupaten Tangerang',
-      label: 'Kabupaten Tangerang',
-      source: 'text',
-      detailAlamat: makeDetailAlamat('Kabupaten Tangerang', rawKecamatan, rawKelurahan),
-      kecamatan: rawKecamatan,
-      kelurahan: rawKelurahan,
-      kabupatenKota: 'Kabupaten Tangerang',
-      provinsi: rawProvinsi || 'BANTEN'
-    };
-  }
-  if ((upperKabKota.includes('KOTA') || rawAggregate.includes('KOTA TANGERANG')) && !rawAggregate.includes('SELATAN')) {
-    return {
-      category: 'Kota Tangerang',
-      label: 'Kota Tangerang',
-      source: 'text',
-      detailAlamat: makeDetailAlamat('Kota Tangerang', rawKecamatan, rawKelurahan),
-      kecamatan: rawKecamatan,
-      kelurahan: rawKelurahan,
-      kabupatenKota: 'Kota Tangerang',
-      provinsi: rawProvinsi || 'BANTEN'
-    };
-  }
-
-  // 8. Default untuk lingkungan RT di Kutabumi / Pasar Kemis (Kabupaten Tangerang)
-  return {
-    category: 'Kabupaten Tangerang',
-    label: 'Kabupaten Tangerang',
-    source: 'default',
-    detailAlamat: makeDetailAlamat('Kabupaten Tangerang', rawKecamatan || 'Pasar Kemis', rawKelurahan || 'Kutabumi'),
-    kecamatan: rawKecamatan || 'Pasar Kemis',
-    kelurahan: rawKelurahan || 'Kutabumi',
-    kabupatenKota: 'Kabupaten Tangerang',
-    provinsi: rawProvinsi || 'BANTEN'
-  };
 }
 
 // Helper function to extract No. KK from SVG, text, OCR map, or document hash fallback
@@ -2576,7 +2134,8 @@ async function handleLogin(req: express.Request, res: express.Response, next: ex
   }
 }
 
-app.post(["/api/login", "/login", "/api/auth/login", "/auth/login"], validateRequest(LoginValidator), handleLogin);
+app.post("/api/login", validateRequest(LoginValidator), handleLogin);
+app.post("/api/auth/login", validateRequest(LoginValidator), handleLogin);
 
 app.post("/api/ping", async (req, res) => {
   const { id } = req.body;
@@ -2728,7 +2287,7 @@ app.put(["/api/password", "/api/auth/change-password"], async (req, res) => {
 });
 
 app.put("/api/profile", async (req, res) => {
-  const { id, username, nama, alamat, noHp, status, photo, umur, tglLahir, noKk, alamatKk, wilayahKk, dokumenKk, dokumenKtp } = req.body;
+  const { id, username, nama, alamat, noHp, status, photo, umur, tglLahir, noKk, dokumenKk, dokumenKtp } = req.body;
   const rtId = getAuthorizedRtId(req);
   const userAuth = getAuthUser(req);
   const requesterRole = userAuth?.role || (req.headers['x-user-role'] as string) || 'warga';
@@ -2761,8 +2320,6 @@ app.put("/api/profile", async (req, res) => {
     if (umur !== undefined) user.umur = Number(umur);
     if (tglLahir !== undefined) user.tglLahir = tglLahir;
     if (noKk !== undefined) user.noKk = noKk;
-    if (alamatKk !== undefined) user.alamatKk = alamatKk;
-    if (wilayahKk !== undefined) user.wilayahKk = wilayahKk;
     if (dokumenKk !== undefined) {
       user.dokumenKk = dokumenKk;
       user.markModified('dokumenKk');
@@ -2777,32 +2334,13 @@ app.put("/api/profile", async (req, res) => {
           const uRt = user.rtId || rtId;
           extractNoKkViaOcrAsync(String(dokumenKk), uUsername, uNama).then(async (extractedNo) => {
             if (extractedNo) {
-              const autoReg = identifyKkRegion({ noKk: extractedNo, username: uUsername, nama: uNama });
-              await UserModel.updateOne({ _id: uId }, { 
-                noKk: extractedNo,
-                wilayahKk: autoReg.category,
-                alamatKk: autoReg.detailAlamat
-              });
+              await UserModel.updateOne({ _id: uId }, { noKk: extractedNo });
               broadcastEvent('update', { type: 'users', rtId: uRt });
             }
           }).catch(() => {});
         }
-        if (!user.wilayahKk) {
-          const reg = identifyKkRegion({
-            noKk: user.noKk,
-            alamatKk: user.alamatKk,
-            alamat: user.alamat,
-            dokumenKk: String(dokumenKk),
-            nama: user.nama,
-            username: user.username
-          });
-          user.wilayahKk = reg.category;
-          if (!user.alamatKk) user.alamatKk = reg.detailAlamat;
-        }
       } else {
         user.noKk = '';
-        user.wilayahKk = '';
-        user.alamatKk = '';
       }
     }
     if (dokumenKtp !== undefined) {
@@ -2981,7 +2519,7 @@ app.post("/api/change-username", async (req, res) => {
 });
 
 // GET current authenticated user profile
-app.get(["/api/me", "/me", "/api/auth/me", "/auth/me"], async (req, res) => {
+app.get(["/api/me", "/api/auth/me"], async (req, res) => {
   try {
     await connectDB();
     const rtId = getAuthorizedRtId(req);
@@ -3015,14 +2553,14 @@ app.get(["/api/me", "/me", "/api/auth/me", "/auth/me"], async (req, res) => {
 
 // Dedicated endpoint for Ketua RT or the Warga themselves to upload/update documents
 app.put("/api/warga/:id/dokumen", async (req, res) => {
-  const { noKk, dokumenKk, dokumenKtp, alamatKk, wilayahKk } = req.body;
+  const { noKk, dokumenKk, dokumenKtp } = req.body;
   const rtId = getAuthorizedRtId(req);
   const targetId = req.params.id;
   const userAuth = getAuthUser(req);
   const requesterRole = userAuth?.role || (req.headers['x-user-role'] as string) || 'warga';
   const requesterId = userAuth?.id || (req.headers['x-user-id'] as string) || '';
 
-  const isKetuaRT = ['admin', 'developer', 'sekretaris'].includes(requesterRole);
+  const isKetuaRT = ['admin', 'developer'].includes(requesterRole);
   if (!isKetuaRT && requesterId !== targetId) {
     return res.status(403).json({ error: "Akses ditolak: Hanya Ketua RT yang dapat memperbarui dokumen warga lain." });
   }
@@ -3035,12 +2573,6 @@ app.put("/api/warga/:id/dokumen", async (req, res) => {
   const beforeObj = user.toObject();
   if (noKk !== undefined) {
     user.noKk = noKk;
-  }
-  if (alamatKk !== undefined) {
-    user.alamatKk = alamatKk;
-  }
-  if (wilayahKk !== undefined) {
-    user.wilayahKk = wilayahKk;
   }
   if (dokumenKk !== undefined) {
     user.dokumenKk = dokumenKk;
@@ -3056,32 +2588,13 @@ app.put("/api/warga/:id/dokumen", async (req, res) => {
         const uRt = user.rtId || rtId;
         extractNoKkViaOcrAsync(String(dokumenKk), uUsername, uNama).then(async (extractedNo) => {
           if (extractedNo) {
-            const autoReg = identifyKkRegion({ noKk: extractedNo, username: uUsername, nama: uNama });
-            await UserModel.updateOne({ _id: uId }, { 
-              noKk: extractedNo,
-              wilayahKk: autoReg.category,
-              alamatKk: autoReg.detailAlamat
-            });
+            await UserModel.updateOne({ _id: uId }, { noKk: extractedNo });
             broadcastEvent('update', { type: 'users', rtId: uRt });
           }
         }).catch(() => {});
       }
-      if (!user.wilayahKk) {
-        const reg = identifyKkRegion({
-          noKk: user.noKk,
-          alamatKk: user.alamatKk,
-          alamat: user.alamat,
-          dokumenKk: String(dokumenKk),
-          nama: user.nama,
-          username: user.username
-        });
-        user.wilayahKk = reg.category;
-        if (!user.alamatKk) user.alamatKk = reg.detailAlamat;
-      }
     } else {
       user.noKk = '';
-      user.wilayahKk = '';
-      user.alamatKk = '';
     }
   }
   if (dokumenKtp !== undefined) {
@@ -3117,48 +2630,12 @@ app.get("/api/warga-dokumen-kk", enforceRoles(['admin', 'sekretaris']), async (r
       const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
       const hasKtp = Boolean(u.hasKtp || (Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp && String(u.dokumenKtp).trim() !== '')));
       const resolvedNoKk = u.noKk || (hasKk ? extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama) : '');
-
-      const region = hasKk ? identifyKkRegion({
-        noKk: resolvedNoKk,
-        alamatKk: u.alamatKk,
-        alamat: u.alamat,
-        dokumenKk: String(u.dokumenKk || ''),
-        wilayahKk: u.wilayahKk,
-        kkCategory: u.kkCategory,
-        kkKecamatan: u.kkKecamatan,
-        kkKelurahan: u.kkKelurahan,
-        kkKabupatenKota: u.kkKabupatenKota,
-        kkProvinsi: u.kkProvinsi,
-        nama: u.nama,
-        username: u.username,
-        verifiedByAdmin: u.kkVerifiedByAdmin
-      }) : null;
-
-      const wilayahKk = region ? region.category : (u.wilayahKk || u.kkCategory || '');
-      const kkCategory = wilayahKk;
-      const alamatKk = u.alamatKk || (region ? region.detailAlamat : '');
-      const kkKecamatan = u.kkKecamatan || (region ? region.kecamatan : '');
-      const kkKelurahan = u.kkKelurahan || (region ? region.kelurahan : '');
-      const kkKabupatenKota = u.kkKabupatenKota || (region ? region.kabupatenKota : '');
-      const kkProvinsi = u.kkProvinsi || (region ? region.provinsi : '');
-
-      if (hasKk && (!u.noKk || !u.wilayahKk || !u.kkCategory) && u._id) {
-        UserModel.updateOne(
-          { _id: u._id },
-          { $set: { noKk: resolvedNoKk || u.noKk || '', wilayahKk, kkCategory, alamatKk, kkKecamatan, kkKelurahan, kkKabupatenKota, kkProvinsi } }
-        ).catch(() => {});
+      if (hasKk && !u.noKk && resolvedNoKk && u._id) {
+        UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk } }).catch(() => {});
       }
       return {
         ...u,
         noKk: resolvedNoKk || u.noKk || '',
-        wilayahKk,
-        kkCategory,
-        alamatKk,
-        kkKecamatan,
-        kkKelurahan,
-        kkKabupatenKota,
-        kkProvinsi,
-        kkVerifiedByAdmin: Boolean(u.kkVerifiedByAdmin),
         hasKk,
         hasKtp,
         isOnline: activeSessions.has(u.id) && Date.now() - activeSessions.get(u.id)! < 15000
@@ -3168,208 +2645,6 @@ app.get("/api/warga-dokumen-kk", enforceRoles(['admin', 'sekretaris']), async (r
   } catch (err: any) {
     console.error("Gagal mengambil data dokumen KK:", err);
     res.status(500).json({ error: "Gagal mengambil data dokumen KK" });
-  }
-});
-
-// Endpoint untuk memproses pemindaian & identifikasi seluruh dokumen KK warga yang sudah diunggah
-app.post("/api/warga/identifikasi-semua-kk", enforceRoles(['admin', 'sekretaris']), async (req, res) => {
-  const rtId = getAuthorizedRtId(req);
-  try {
-    await connectDB();
-    const users = await UserModel.find({ rtId, role: { $ne: 'developer' } }).select('+dokumenKk');
-    const eligibleUsers = users.filter((u: any) => u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
-
-    let kabTangerangCount = 0;
-    let kotaTangerangCount = 0;
-    let luarKotaTangerangCount = 0;
-    let belumTeridentifikasiCount = 0;
-    const updatedUsers: any[] = [];
-
-    for (const u of eligibleUsers) {
-      const docStr = String(u.dokumenKk || '');
-      let resolvedNo = u.noKk;
-      if (!resolvedNo || resolvedNo.trim() === '') {
-        resolvedNo = extractNoKkFromDocument(docStr, u.username, u.nama) || '';
-      }
-
-      const reg = identifyKkRegion({
-        noKk: resolvedNo,
-        alamatKk: u.alamatKk,
-        alamat: u.alamat,
-        dokumenKk: docStr,
-        wilayahKk: u.wilayahKk,
-        kkCategory: u.kkCategory,
-        kkKecamatan: u.kkKecamatan,
-        kkKelurahan: u.kkKelurahan,
-        kkKabupatenKota: u.kkKabupatenKota,
-        kkProvinsi: u.kkProvinsi,
-        nama: u.nama,
-        username: u.username,
-        verifiedByAdmin: u.kkVerifiedByAdmin
-      });
-
-      const cat = reg.category;
-      if (cat === 'Kabupaten Tangerang') kabTangerangCount++;
-      else if (cat === 'Kota Tangerang') kotaTangerangCount++;
-      else if (cat === 'Luar Kota Tangerang') luarKotaTangerangCount++;
-      else belumTeridentifikasiCount++;
-
-      // Simpan perubahan ke database jika belum diverifikasi manual
-      if (!u.kkVerifiedByAdmin) {
-        u.noKk = resolvedNo || u.noKk || '';
-        u.wilayahKk = cat;
-        u.kkCategory = cat;
-        u.kkKecamatan = reg.kecamatan || u.kkKecamatan || '';
-        u.kkKelurahan = reg.kelurahan || u.kkKelurahan || '';
-        u.kkKabupatenKota = reg.kabupatenKota || u.kkKabupatenKota || cat;
-        u.kkProvinsi = reg.provinsi || u.kkProvinsi || 'BANTEN';
-        u.alamatKk = reg.detailAlamat || u.alamatKk || cat;
-        await u.save();
-      }
-
-      updatedUsers.push({
-        id: u.id,
-        nama: u.nama,
-        username: u.username,
-        noKk: u.noKk,
-        wilayahKk: u.wilayahKk,
-        kkCategory: u.kkCategory,
-        kkKecamatan: u.kkKecamatan,
-        kkKelurahan: u.kkKelurahan,
-        kkKabupatenKota: u.kkKabupatenKota,
-        kkProvinsi: u.kkProvinsi,
-        alamatKk: u.alamatKk,
-        kkVerifiedByAdmin: Boolean(u.kkVerifiedByAdmin)
-      });
-    }
-
-    broadcastEvent('update', {
-      type: 'users',
-      rtId,
-      action: 'identifikasi-kk',
-      time: new Date().toISOString()
-    });
-
-    res.json({
-      message: `Identifikasi alamat KK berhasil dilakukan untuk ${eligibleUsers.length} warga`,
-      summary: {
-        totalKk: eligibleUsers.length,
-        kabupatenTangerang: kabTangerangCount,
-        kotaTangerang: kotaTangerangCount,
-        luarKotaTangerang: luarKotaTangerangCount,
-        belumTeridentifikasi: belumTeridentifikasiCount
-      },
-      users: updatedUsers
-    });
-  } catch (err: any) {
-    console.error("Gagal identifikasi semua KK warga:", err);
-    res.status(500).json({ error: "Terjadi kesalahan saat memproses identifikasi KK." });
-  }
-});
-
-// Endpoint untuk koreksi/verifikasi manual kategori wilayah & alamat KK oleh Pengurus RT
-app.put("/api/warga/:id/kategori-kk", enforceRoles(['admin', 'sekretaris']), async (req, res) => {
-  const rtId = getAuthorizedRtId(req);
-  const targetId = req.params.id;
-  const { kkCategory, kkKecamatan, kkKelurahan, kkKabupatenKota, kkProvinsi, alamatKk } = req.body;
-
-  if (!kkCategory || !['Kabupaten Tangerang', 'Kota Tangerang', 'Luar Kota Tangerang'].includes(kkCategory)) {
-    return res.status(400).json({ error: "Pilihan kategori tidak valid. Pilih: Kabupaten Tangerang, Kota Tangerang, atau Luar Kota Tangerang." });
-  }
-
-  try {
-    await connectDB();
-    const user = await UserModel.findOne({ id: targetId, rtId });
-    if (!user) return res.status(404).json({ error: "Data warga tidak ditemukan." });
-
-    user.wilayahKk = kkCategory;
-    user.kkCategory = kkCategory;
-    if (kkKecamatan !== undefined) user.kkKecamatan = kkKecamatan;
-    if (kkKelurahan !== undefined) user.kkKelurahan = kkKelurahan;
-    if (kkKabupatenKota !== undefined) user.kkKabupatenKota = kkKabupatenKota;
-    if (kkProvinsi !== undefined) user.kkProvinsi = kkProvinsi;
-    if (alamatKk !== undefined) user.alamatKk = alamatKk;
-    user.kkVerifiedByAdmin = true;
-
-    await user.save();
-
-    broadcastEvent('update', {
-      type: 'users',
-      rtId,
-      action: 'update',
-      time: new Date().toISOString()
-    });
-
-    res.json({
-      message: `Kategori wilayah KK untuk ${user.nama} berhasil disimpan (${kkCategory})`,
-      user: {
-        id: user.id,
-        nama: user.nama,
-        username: user.username,
-        noKk: user.noKk,
-        wilayahKk: user.wilayahKk,
-        kkCategory: user.kkCategory,
-        kkKecamatan: user.kkKecamatan,
-        kkKelurahan: user.kkKelurahan,
-        kkKabupatenKota: user.kkKabupatenKota,
-        kkProvinsi: user.kkProvinsi,
-        alamatKk: user.alamatKk,
-        kkVerifiedByAdmin: Boolean(user.kkVerifiedByAdmin)
-      }
-    });
-  } catch (err: any) {
-    console.error("Gagal menyimpan perubahan kategori KK:", err);
-    res.status(500).json({ error: "Gagal menyimpan perubahan kategori KK." });
-  }
-});
-
-// Endpoint rekapitulasi ringkasan statistik kategori KK warga
-app.get("/api/warga/rekapitulasi-kk", enforceRoles(['admin', 'sekretaris']), async (req, res) => {
-  const rtId = getAuthorizedRtId(req);
-  try {
-    await connectDB();
-    const users = await UserModel.find({ rtId, role: { $ne: 'developer' } }).select('+dokumenKk').lean();
-    const withKk = users.filter((u: any) => u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
-
-    let kabTangerang = 0;
-    let kotaTangerang = 0;
-    let luarKotaTangerang = 0;
-    const perKecamatan: Record<string, number> = {};
-
-    withKk.forEach((u: any) => {
-      const reg = identifyKkRegion({
-        noKk: u.noKk,
-        alamatKk: u.alamatKk,
-        alamat: u.alamat,
-        dokumenKk: String(u.dokumenKk || ''),
-        wilayahKk: u.wilayahKk,
-        kkCategory: u.kkCategory,
-        kkKecamatan: u.kkKecamatan,
-        kkKelurahan: u.kkKelurahan,
-        kkKabupatenKota: u.kkKabupatenKota,
-        kkProvinsi: u.kkProvinsi,
-        nama: u.nama,
-        username: u.username,
-        verifiedByAdmin: u.kkVerifiedByAdmin
-      });
-      if (reg.category === 'Kabupaten Tangerang') kabTangerang++;
-      else if (reg.category === 'Kota Tangerang') kotaTangerang++;
-      else if (reg.category === 'Luar Kota Tangerang') luarKotaTangerang++;
-
-      const kec = reg.kecamatan || 'Lainnya';
-      perKecamatan[kec] = (perKecamatan[kec] || 0) + 1;
-    });
-
-    res.json({
-      totalWarga: users.length,
-      totalKk: withKk.length,
-      kabupatenTangerang: kabTangerang,
-      kotaTangerang,
-      luarKotaTangerang,
-      perKecamatan
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: "Gagal mengambil rekapitulasi KK" });
   }
 });
 
@@ -4023,20 +3298,6 @@ Kembalikan hasil dalam bentuk JSON Array.`;
       user.noKk = extractedNoKk;
     }
 
-    const identifiedRegion = identifyKkRegion({
-      noKk: user.noKk,
-      alamatKk: user.alamatKk,
-      alamat: user.alamat,
-      dokumenKk: kkDoc,
-      wilayahKk: user.wilayahKk,
-      nama: user.nama,
-      username: user.username
-    });
-    user.wilayahKk = identifiedRegion.category;
-    if (!user.alamatKk) {
-      user.alamatKk = identifiedRegion.detailAlamat;
-    }
-
     user.markModified('members');
     const updatedUser = await user.save();
 
@@ -4150,43 +3411,12 @@ app.get("/api/warga", async (req, res) => {
       const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
       const hasKtp = Boolean(u.hasKtp || (Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp && String(u.dokumenKtp).trim() !== '')));
       const resolvedNoKk = u.noKk || (hasKk ? extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama) : '');
-      const region = hasKk ? identifyKkRegion({
-        noKk: resolvedNoKk,
-        alamatKk: u.alamatKk,
-        alamat: u.alamat,
-        dokumenKk: String(u.dokumenKk || ''),
-        wilayahKk: u.wilayahKk,
-        kkCategory: u.kkCategory,
-        kkKecamatan: u.kkKecamatan,
-        kkKelurahan: u.kkKelurahan,
-        kkKabupatenKota: u.kkKabupatenKota,
-        kkProvinsi: u.kkProvinsi,
-        nama: u.nama,
-        username: u.username,
-        verifiedByAdmin: u.kkVerifiedByAdmin
-      }) : null;
-      const wilayahKk = region ? region.category : (u.wilayahKk || u.kkCategory || '');
-      const kkCategory = wilayahKk;
-      const alamatKk = u.alamatKk || (region ? region.detailAlamat : '');
-      const kkKecamatan = u.kkKecamatan || (region ? region.kecamatan : '');
-      const kkKelurahan = u.kkKelurahan || (region ? region.kelurahan : '');
-      const kkKabupatenKota = u.kkKabupatenKota || (region ? region.kabupatenKota : '');
-      const kkProvinsi = u.kkProvinsi || (region ? region.provinsi : '');
-
-      if (hasKk && (!u.noKk || !u.wilayahKk || !u.kkCategory) && u._id) {
-        UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk, wilayahKk, kkCategory, alamatKk, kkKecamatan, kkKelurahan, kkKabupatenKota, kkProvinsi } }).catch(() => {});
+      if (hasKk && !u.noKk && resolvedNoKk && u._id) {
+        UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk } }).catch(() => {});
       }
       return {
         ...u,
         noKk: resolvedNoKk || u.noKk || '',
-        wilayahKk,
-        kkCategory,
-        alamatKk,
-        kkKecamatan,
-        kkKelurahan,
-        kkKabupatenKota,
-        kkProvinsi,
-        kkVerifiedByAdmin: Boolean(u.kkVerifiedByAdmin),
         hasKk,
         hasKtp,
         isOnline: activeSessions.has(u.id) && Date.now() - activeSessions.get(u.id)! < 15000
@@ -4215,31 +3445,8 @@ app.get("/api/warga", async (req, res) => {
       const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
       const hasKtp = Boolean(u.hasKtp || (Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp && String(u.dokumenKtp).trim() !== '')));
       const resolvedNoKk = u.noKk || (hasKk ? extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama) : '');
-      const region = hasKk ? identifyKkRegion({
-        noKk: resolvedNoKk,
-        alamatKk: u.alamatKk,
-        alamat: u.alamat,
-        dokumenKk: String(u.dokumenKk || ''),
-        wilayahKk: u.wilayahKk,
-        kkCategory: u.kkCategory,
-        kkKecamatan: u.kkKecamatan,
-        kkKelurahan: u.kkKelurahan,
-        kkKabupatenKota: u.kkKabupatenKota,
-        kkProvinsi: u.kkProvinsi,
-        nama: u.nama,
-        username: u.username,
-        verifiedByAdmin: u.kkVerifiedByAdmin
-      }) : null;
-      const wilayahKk = region ? region.category : (u.wilayahKk || u.kkCategory || '');
-      const kkCategory = wilayahKk;
-      const alamatKk = u.alamatKk || (region ? region.detailAlamat : '');
-      const kkKecamatan = u.kkKecamatan || (region ? region.kecamatan : '');
-      const kkKelurahan = u.kkKelurahan || (region ? region.kelurahan : '');
-      const kkKabupatenKota = u.kkKabupatenKota || (region ? region.kabupatenKota : '');
-      const kkProvinsi = u.kkProvinsi || (region ? region.provinsi : '');
-
-      if (hasKk && (!u.noKk || !u.wilayahKk || !u.kkCategory) && u._id) {
-        UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk, wilayahKk, kkCategory, alamatKk, kkKecamatan, kkKelurahan, kkKabupatenKota, kkProvinsi } }).catch(() => {});
+      if (hasKk && !u.noKk && resolvedNoKk && u._id) {
+        UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk } }).catch(() => {});
       }
       if (isSummary && !isRequesterAdmin && !isOwn) {
         return {
@@ -4252,14 +3459,6 @@ app.get("/api/warga", async (req, res) => {
           role: u.role,
           photo: u.photo,
           noKk: resolvedNoKk || u.noKk || '',
-          wilayahKk,
-          kkCategory,
-          alamatKk,
-          kkKecamatan,
-          kkKelurahan,
-          kkKabupatenKota,
-          kkProvinsi,
-          kkVerifiedByAdmin: Boolean(u.kkVerifiedByAdmin),
           umur: u.umur,
           tglLahir: u.tglLahir,
           jenisKelamin: u.jenisKelamin,
@@ -4274,14 +3473,6 @@ app.get("/api/warga", async (req, res) => {
       return {
         ...u,
         noKk: resolvedNoKk || u.noKk || '',
-        wilayahKk,
-        kkCategory,
-        alamatKk,
-        kkKecamatan,
-        kkKelurahan,
-        kkKabupatenKota,
-        kkProvinsi,
-        kkVerifiedByAdmin: Boolean(u.kkVerifiedByAdmin),
         hasKk,
         hasKtp,
         isOnline
@@ -6431,28 +5622,27 @@ app.get(["/api/public/beranda-summary", "/api/dashboard/summary"], async (req, r
 });
 
 // Status checking API
-app.get(["/api/health", "/health"], (req, res) => {
+app.get("/api/health", (req, res) => {
   res.json({ status: "ok", mode: "modular-tables", isDbConnected });
 });
 
-// Global Error Handler for APIs (Active both in Vercel Serverless & Local/Docker)
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (req.path.startsWith('/api/') || req.url.startsWith('/api/')) {
-    console.error("API Unhandled Error:", err?.message || err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: err?.message || "Internal Server Error" });
-    }
-  } else {
-    next(err);
-  }
-});
-
-// Catch-all 404 handler for API routes to prevent falling through to HTML
-app.use(['/api/*', '/api'], (req: express.Request, res: express.Response) => {
-  res.status(404).json({ error: `API route ${req.originalUrl || req.url} not found` });
-});
-
 export async function startServer(listen = true) {
+  // Global Error Handler for APIs
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.path.startsWith('/api/')) {
+      console.error("API Error:", err?.message || err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    } else {
+      next(err);
+    }
+  });
+
+  // Catch-all 404 handler for API routes to prevent falling through to Vite/index.html
+  app.use('/api/*', (req: express.Request, res: express.Response) => {
+    res.status(404).json({ error: `API route ${req.originalUrl} not found` });
+  });
 
   const distPath = path.join(process.cwd(), 'dist');
   const distIndex = path.join(distPath, 'index.html');

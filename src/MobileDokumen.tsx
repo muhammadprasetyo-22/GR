@@ -83,24 +83,12 @@ const VERIFIED_KK_BY_USER: Record<string, string> = {
   'muhammad nurmanto': '3603122309220010',
   'e17': '3603172101210011',
   'mhd arie setiyawan': '3603172101210011',
-  'arie setiyawan': '3603172101210011',
   'f04': '3603122010200011',
   'budi saputra': '3603122010200011',
   'f06': '3671070410070650',
   'waluyo': '3671070410070650',
   'f24': '3603121407140001',
   'ilham': '3603121407140001',
-  'fajri': '3603121508200004',
-  'fajri hidayatullah': '3603121508200004',
-  'solikin': '3603121804190006',
-  'nur iman': '3603121102210002',
-  'suharja': '3603120509180002',
-  'dedi': '3603122203170003',
-  'dedi rosadi': '3603122203170003',
-  'intiastuti': '3603121406160002',
-  'edi prasetyo': '3603121011150010',
-  'mala': '3603122501140012',
-  'mala widiyanto': '3603122501140012',
   'a01': '3603120101200001',
   'a03': '3603120301200002'
 };
@@ -163,73 +151,6 @@ function extractNoKkFromDoc(kkDoc: string, username?: string, nama?: string): st
   return `360312${day}${month}${year}${seq}`;
 }
 
-const VERIFIED_KK_ADDRESS_BY_USER: Record<string, { category: 'Kabupaten Tangerang' | 'Kota Tangerang' | 'Luar Kota Tangerang'; alamat?: string }> = {
-  'ketuart1': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'm adji prasetyo': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'wahyu': { category: 'Luar Kota Tangerang', alamat: 'Kota Pekalongan, Jawa Tengah' },
-  'wahyu hidayat': { category: 'Luar Kota Tangerang', alamat: 'Kota Pekalongan, Jawa Tengah' },
-  'giarto': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'sugiarto': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'rudi': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'muhamad rudiyanto': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'e15': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'hafiz': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'a29': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'noven aji noerman': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'd07': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'sudrajat': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'd09': { category: 'Luar Kota Tangerang', alamat: 'Kab. Lampung Barat, Lampung' },
-  'azirwan': { category: 'Luar Kota Tangerang', alamat: 'Kab. Lampung Barat, Lampung' },
-  'd11': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'priyanto': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'd04': { category: 'Luar Kota Tangerang', alamat: 'Kab. Wonogiri, Jawa Tengah' },
-  'didik wiyadi': { category: 'Luar Kota Tangerang', alamat: 'Kab. Wonogiri, Jawa Tengah' },
-  'd18': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'abdul wahid muhtadi': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'd20': { category: 'Kota Tangerang', alamat: 'Kec. Karawaci, Kota Tangerang' },
-  'ahmad fauzi': { category: 'Kota Tangerang', alamat: 'Kec. Karawaci, Kota Tangerang' },
-  'e01': { category: 'Kabupaten Tangerang', alamat: 'Kec. Rajeg, Kab. Tangerang' },
-  'aa mustopa': { category: 'Kabupaten Tangerang', alamat: 'Kec. Rajeg, Kab. Tangerang' },
-  'e05': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'ahmad mahendra': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'e09': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'muhammad firdaus': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'e11': { category: 'Luar Kota Tangerang', alamat: 'Cengkareng, Jakarta Barat' },
-  'edi santoso': { category: 'Luar Kota Tangerang', alamat: 'Cengkareng, Jakarta Barat' },
-  'e11a': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'muhammad nurmanto': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'e17': { category: 'Kabupaten Tangerang', alamat: 'Kec. Sindang Jaya, Kab. Tangerang' },
-  'mhd arie setiyawan': { category: 'Kabupaten Tangerang', alamat: 'Kec. Sindang Jaya, Kab. Tangerang' },
-  'arie setiyawan': { category: 'Kabupaten Tangerang', alamat: 'Kec. Sindang Jaya, Kab. Tangerang' },
-  'f04': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'budi saputra': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'f06': { category: 'Kota Tangerang', alamat: 'Kec. Periuk, Kota Tangerang' },
-  'waluyo': { category: 'Kota Tangerang', alamat: 'Kec. Periuk, Kota Tangerang' },
-  'f24': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'ilham': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'fajri': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'fajri hidayatullah': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'solikin': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'nur iman': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'suharja': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'dedi': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'dedi rosadi': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'intiastuti': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'edi prasetyo': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'mala': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'mala widiyanto': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'a01': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' },
-  'a03': { category: 'Kabupaten Tangerang', alamat: 'Pasar Kemis, Kab. Tangerang' }
-};
-
-import {
-  resolveWargaKkRegion,
-  KECAMATAN_KAB_TANGERANG,
-  KECAMATAN_KOTA_TANGERANG,
-  KELURAHAN_KAB_TANGERANG
-} from './utils/kkRegionResolver';
-export { resolveWargaKkRegion };
-
 export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: () => void, currentUser: any, onUpdateUser: (u: any) => void }) => {
   const isKetuaRT = currentUser?.role === 'admin' || currentUser?.role === 'developer';
   const isSekretaris = currentUser?.role === 'sekretaris';
@@ -264,23 +185,10 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
   const [wargaList, setWargaList] = useState<any[]>([]);
   const [loadingWarga, setLoadingWarga] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'semua' | 'terupload' | 'kab_tangerang' | 'kota_tangerang' | 'luar_tangerang' | 'belum' | 'pengurus' | 'warga'>('semua');
+  const [roleFilter, setRoleFilter] = useState<'semua' | 'terupload' | 'belum' | 'pengurus' | 'warga'>('semua');
   const [uploadingTargetId, setUploadingTargetId] = useState<string | null>(null);
   const [extractingKkUserId, setExtractingKkUserId] = useState<string | null>(null);
   const [selectedMemberDetail, setSelectedMemberDetail] = useState<any | null>(null);
-
-  // Modal Ubah Kategori Wilayah KK
-  const [editingKkRegionTarget, setEditingKkRegionTarget] = useState<any | null>(null);
-  const [regionCategoryInput, setRegionCategoryInput] = useState<'Kabupaten Tangerang' | 'Kota Tangerang' | 'Luar Kota Tangerang'>('Kabupaten Tangerang');
-  const [regionKecamatanInput, setRegionKecamatanInput] = useState('');
-  const [regionKelurahanInput, setRegionKelurahanInput] = useState('');
-  const [regionAlamatInput, setRegionAlamatInput] = useState('');
-  const [savingRegion, setSavingRegion] = useState(false);
-
-  // Batch Scanner Identifikasi KK
-  const [isBatchScanningKk, setIsBatchScanningKk] = useState(false);
-  const [batchScanResult, setBatchScanResult] = useState<any | null>(null);
-  const [showBatchScanModal, setShowBatchScanModal] = useState(false);
 
   // Quick Upload Modal for Ketua RT to select any Warga/Pengurus and upload KK/KTP
   const [showQuickUploadModal, setShowQuickUploadModal] = useState(false);
@@ -382,9 +290,7 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
               dokumenKtp,
               hasKk,
               hasKtp,
-              noKk: u.noKk || kkInfo?.noKk || '',
-              wilayahKk: u.wilayahKk || kkInfo?.wilayahKk || '',
-              alamatKk: u.alamatKk || kkInfo?.alamatKk || ''
+              noKk: u.noKk || kkInfo?.noKk || ''
             };
           });
 
@@ -398,79 +304,6 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
       console.error('Gagal memuat daftar warga & pengurus:', e);
     } finally {
       setLoadingWarga(false);
-    }
-  };
-
-  const handleBatchScanAllKk = async () => {
-    setIsBatchScanningKk(true);
-    try {
-      const res = await apiFetch('/api/warga/identifikasi-semua-kk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setBatchScanResult(data);
-        setShowBatchScanModal(true);
-        showToast(data.message || 'Identifikasi KK seluruh warga berhasil dijalankan!');
-        fetchWargaAndPengurus();
-        window.dispatchEvent(new CustomEvent('app_data_update', { detail: 'users' }));
-      } else {
-        showToast(data.error || 'Gagal memproses identifikasi KK.', true);
-      }
-    } catch {
-      showToast('Terjadi kesalahan jaringan saat memproses identifikasi KK.', true);
-    } finally {
-      setIsBatchScanningKk(false);
-    }
-  };
-
-  const handleSaveKkRegionDokumen = async () => {
-    if (!editingKkRegionTarget?.id) return;
-    setSavingRegion(true);
-    try {
-      const res = await apiFetch(`/api/warga/${editingKkRegionTarget.id}/kategori-kk`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kkCategory: regionCategoryInput,
-          kkKecamatan: regionKecamatanInput.trim(),
-          kkKelurahan: regionKelurahanInput.trim(),
-          alamatKk: regionAlamatInput.trim()
-        })
-      });
-      if (res.ok) {
-        showToast(`Kategori wilayah KK untuk ${editingKkRegionTarget.nama} berhasil diperbarui (${regionCategoryInput})!`);
-        setWargaList(prev => prev.map(u => (u.id === editingKkRegionTarget.id ? {
-          ...u,
-          wilayahKk: regionCategoryInput,
-          kkCategory: regionCategoryInput,
-          kkKecamatan: regionKecamatanInput.trim(),
-          kkKelurahan: regionKelurahanInput.trim(),
-          alamatKk: regionAlamatInput.trim(),
-          kkVerifiedByAdmin: true
-        } : u)));
-        if (selectedMemberDetail?.id === editingKkRegionTarget.id) {
-          setSelectedMemberDetail((prev: any) => ({
-            ...prev,
-            wilayahKk: regionCategoryInput,
-            kkCategory: regionCategoryInput,
-            kkKecamatan: regionKecamatanInput.trim(),
-            kkKelurahan: regionKelurahanInput.trim(),
-            alamatKk: regionAlamatInput.trim(),
-            kkVerifiedByAdmin: true
-          }));
-        }
-        setEditingKkRegionTarget(null);
-        window.dispatchEvent(new CustomEvent('app_data_update', { detail: 'users' }));
-      } else {
-        const errJson = await res.json().catch(() => ({}));
-        showToast(errJson.error || 'Gagal menyimpan wilayah KK', true);
-      }
-    } catch {
-      showToast('Terjadi kesalahan jaringan saat menyimpan wilayah KK', true);
-    } finally {
-      setSavingRegion(false);
     }
   };
 
@@ -951,8 +784,7 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
         !q ||
         (u.nama || '').toLowerCase().includes(q) ||
         (u.username || '').toLowerCase().includes(q) ||
-        (u.alamat || '').toLowerCase().includes(q) ||
-        (u.noKk || '').toLowerCase().includes(q);
+        (u.alamat || '').toLowerCase().includes(q);
 
       const uRole = u.role || 'warga';
       const isCommittee = ['admin', 'sekretaris', 'bendahara', 'pengurus'].includes(uRole);
@@ -966,22 +798,6 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
       if (roleFilter === 'terupload' && !hasDoc) return false;
       if (roleFilter === 'belum' && hasDoc) return false;
 
-      if (roleFilter === 'kab_tangerang') {
-        if (!hasKk) return false;
-        const reg = resolveWargaKkRegion(u);
-        if (reg.category !== 'Kabupaten Tangerang') return false;
-      }
-      if (roleFilter === 'kota_tangerang') {
-        if (!hasKk) return false;
-        const reg = resolveWargaKkRegion(u);
-        if (reg.category !== 'Kota Tangerang') return false;
-      }
-      if (roleFilter === 'luar_tangerang') {
-        if (!hasKk) return false;
-        const reg = resolveWargaKkRegion(u);
-        if (reg.category !== 'Luar Kota Tangerang') return false;
-      }
-
       return matchSearch;
     });
   }, [wargaList, searchQuery, roleFilter]);
@@ -990,36 +806,18 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
     const total = wargaList.length;
     let uploaded = 0;
     let pengurusCount = 0;
-    let uploadedKk = 0;
-    let kabTangerang = 0;
-    let kotaTangerang = 0;
-    let luarKota = 0;
-
     wargaList.forEach(u => {
       const ktpArr = Array.isArray(u.dokumenKtp) ? u.dokumenKtp : u.dokumenKtp ? [u.dokumenKtp] : [];
       const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
       const hasKtp = Boolean(u.hasKtp || ktpArr.length > 0);
       if (hasKk || hasKtp) uploaded++;
       if (['admin', 'sekretaris', 'bendahara', 'pengurus'].includes(u.role)) pengurusCount++;
-
-      if (hasKk) {
-        uploadedKk++;
-        const reg = resolveWargaKkRegion(u);
-        if (reg.category === 'Kabupaten Tangerang') kabTangerang++;
-        else if (reg.category === 'Kota Tangerang') kotaTangerang++;
-        else if (reg.category === 'Luar Kota Tangerang') luarKota++;
-      }
     });
-
     return {
       total,
       uploaded,
       notUploaded: Math.max(0, total - uploaded),
-      pengurusCount,
-      uploadedKk,
-      kabTangerang,
-      kotaTangerang,
-      luarKota
+      pengurusCount
     };
   }, [wargaList]);
 
@@ -1141,197 +939,89 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                     Hanya Ketua RT yang dapat mengunggah, memperbarui, atau mengekstrak KK & KTP milik Warga maupun Pengurus lain.
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    disabled={isBatchScanningKk}
-                    onClick={handleBatchScanAllKk}
-                    className="px-4 py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-950/20 transition-all shrink-0 flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
-                    title="Pindai dan kategorikan seluruh alamat dokumen KK warga yang sudah diunggah"
-                  >
-                    {isBatchScanningKk ? (
-                      <>
-                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                        </svg>
-                        <span>Mengidentifikasi KK...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-sm">⚡</span>
-                        <span>Scan & Identifikasi Semua KK</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuickTargetUserId(wargaList[0]?.id || '');
-                      setQuickKkData('');
-                      setQuickKkName('');
-                      setQuickKtpList([]);
-                      setShowQuickUploadModal(true);
-                    }}
-                    className="px-4 py-3 bg-white text-teal-700 hover:bg-teal-50 rounded-xl text-xs font-extrabold shadow-sm transition-all shrink-0 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    <span>+ Upload Dokumen</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickTargetUserId(wargaList[0]?.id || '');
+                    setQuickKkData('');
+                    setQuickKkName('');
+                    setQuickKtpList([]);
+                    setShowQuickUploadModal(true);
+                  }}
+                  className="px-4 py-3 bg-white text-teal-700 hover:bg-teal-50 rounded-xl text-xs font-extrabold shadow-sm transition-all shrink-0 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  <span>+ Upload Dokumen Warga / Pengurus</span>
+                </button>
               </div>
 
               {/* Summary Cards (Clickable Filters) */}
-              <div className="space-y-2.5">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setRoleFilter('semua')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                      roleFilter === 'semua'
-                        ? 'bg-teal-50/80 border-teal-500 ring-2 ring-teal-500 shadow-md'
-                        : 'bg-white border-slate-100 shadow-sm hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Total Terdaftar</p>
-                    <p className="text-lg font-black text-slate-800 mt-0.5">{docSummary.total} <span className="text-xs font-semibold text-slate-500">Akun</span></p>
-                    <span className="text-[10px] text-slate-400 font-medium block mt-0.5">Semua warga & pengurus</span>
-                  </button>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRoleFilter('semua')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    roleFilter === 'semua'
+                      ? 'bg-teal-50/80 border-teal-500 ring-2 ring-teal-500 shadow-md'
+                      : 'bg-white border-slate-100 shadow-sm hover:border-slate-300'
+                  }`}
+                >
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">Total Terdaftar</p>
+                  <p className="text-xl font-black text-slate-800 mt-0.5">{docSummary.total} <span className="text-xs font-semibold text-slate-500">Akun</span></p>
+                  <span className="text-[10px] text-slate-400 font-medium block mt-1">Semua data warga</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setRoleFilter('terupload')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                      roleFilter === 'terupload'
-                        ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500 shadow-md'
-                        : 'bg-white border-emerald-100 shadow-sm hover:border-emerald-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-bold text-emerald-600 uppercase">Sudah Upload</p>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    </div>
-                    <p className="text-lg font-black text-emerald-700 mt-0.5">{docSummary.uploaded} <span className="text-xs font-semibold text-emerald-600">Warga</span></p>
-                    <span className="text-[10px] text-emerald-600 font-medium block mt-0.5">KK / KTP ada</span>
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => setRoleFilter('pengurus')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    roleFilter === 'pengurus'
+                      ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500 shadow-md'
+                      : 'bg-white border-slate-100 shadow-sm hover:border-blue-200'
+                  }`}
+                >
+                  <p className="text-[10px] font-bold text-blue-500 uppercase">Pengurus RT</p>
+                  <p className="text-xl font-black text-blue-700 mt-0.5">{docSummary.pengurusCount} <span className="text-xs font-semibold text-blue-500">Orang</span></p>
+                  <span className="text-[10px] text-blue-500/80 font-medium block mt-1">Peran RT</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setRoleFilter('belum')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                      roleFilter === 'belum'
-                        ? 'bg-rose-50 border-rose-500 ring-2 ring-rose-500 shadow-md'
-                        : 'bg-white border-rose-100 shadow-sm hover:border-rose-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-bold text-rose-500 uppercase">Belum Upload</p>
-                      {docSummary.notUploaded > 0 && (
-                        <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                      )}
-                    </div>
-                    <p className="text-lg font-black text-rose-600 mt-0.5">{docSummary.notUploaded} <span className="text-xs font-semibold text-rose-500">Warga</span></p>
-                    <span className="text-[10px] text-rose-500 font-medium block mt-0.5">Belum ada berkas</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRoleFilter('pengurus')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                      roleFilter === 'pengurus'
-                        ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500 shadow-md'
-                        : 'bg-white border-slate-100 shadow-sm hover:border-blue-200'
-                    }`}
-                  >
-                    <p className="text-[10px] font-bold text-blue-500 uppercase">Pengurus RT</p>
-                    <p className="text-lg font-black text-blue-700 mt-0.5">{docSummary.pengurusCount} <span className="text-xs font-semibold text-blue-500">Orang</span></p>
-                    <span className="text-[10px] text-blue-500/80 font-medium block mt-0.5">Struktur RT</span>
-                  </button>
-                </div>
-
-                {/* Baris 3 Kategori Wilayah Alamat KK Semua Yang Sudah Upload */}
-                <div className="bg-slate-100/80 p-2.5 rounded-2xl border border-slate-200/70">
-                  <div className="flex items-center justify-between px-1 mb-2">
-                    <span className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                      <span>📍</span>
-                      <span>Kategori Alamat KK Semua Yang Sudah Upload ({docSummary.uploadedKk} KK)</span>
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-semibold">Klik kotak untuk filter</span>
+                <button
+                  type="button"
+                  onClick={() => setRoleFilter('terupload')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    roleFilter === 'terupload'
+                      ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500 shadow-md'
+                      : 'bg-white border-emerald-100 shadow-sm hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase">Sudah Upload</p>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRoleFilter(roleFilter === 'kab_tangerang' ? 'semua' : 'kab_tangerang')}
-                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                        roleFilter === 'kab_tangerang'
-                          ? 'bg-emerald-100 border-emerald-500 ring-2 ring-emerald-500 shadow-md'
-                          : 'bg-white border-emerald-200/70 hover:bg-emerald-50/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-emerald-800 flex items-center gap-1">
-                          <span>🏛️</span>
-                          <span>Kabupaten Tangerang</span>
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 text-xs font-black">
-                          {docSummary.kabTangerang} KK
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-emerald-700 font-medium mt-1 truncate">
-                        Pasar Kemis, Balaraja, Cikupa, Tigaraksa, dst.
-                      </p>
-                    </button>
+                  <p className="text-xl font-black text-emerald-700 mt-0.5">{docSummary.uploaded} <span className="text-xs font-semibold text-emerald-600">Warga</span></p>
+                  <span className="text-[10px] text-emerald-600 font-medium block mt-1">KK/KTP tersedia</span>
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setRoleFilter(roleFilter === 'kota_tangerang' ? 'semua' : 'kota_tangerang')}
-                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                        roleFilter === 'kota_tangerang'
-                          ? 'bg-teal-100 border-teal-500 ring-2 ring-teal-500 shadow-md'
-                          : 'bg-white border-teal-200/70 hover:bg-teal-50/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-teal-800 flex items-center gap-1">
-                          <span>🏢</span>
-                          <span>Kota Tangerang</span>
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-teal-200/80 text-teal-900 text-xs font-black">
-                          {docSummary.kotaTangerang} KK
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-teal-700 font-medium mt-1 truncate">
-                        Karawaci, Periuk, Ciledug, Cipondoh, dst.
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setRoleFilter(roleFilter === 'luar_tangerang' ? 'semua' : 'luar_tangerang')}
-                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                        roleFilter === 'luar_tangerang'
-                          ? 'bg-amber-100 border-amber-500 ring-2 ring-amber-500 shadow-md'
-                          : 'bg-white border-amber-200/70 hover:bg-amber-50/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-amber-900 flex items-center gap-1">
-                          <span>🌍</span>
-                          <span>Luar Kota Tangerang</span>
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-950 text-xs font-black">
-                          {docSummary.luarKota} KK
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-amber-800 font-medium mt-1 truncate">
-                        DKI Jakarta, Jawa Barat, Jawa Tengah, Lampung, dst.
-                      </p>
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => setRoleFilter('belum')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    roleFilter === 'belum'
+                      ? 'bg-rose-50 border-rose-500 ring-2 ring-rose-500 shadow-md'
+                      : 'bg-white border-rose-100 shadow-sm hover:border-rose-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-rose-500 uppercase">Belum Upload</p>
+                    {docSummary.notUploaded > 0 && (
+                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                    )}
                   </div>
-                </div>
+                  <p className="text-xl font-black text-rose-600 mt-0.5">{docSummary.notUploaded} <span className="text-xs font-semibold text-rose-500">Warga</span></p>
+                  <span className="text-[10px] text-rose-500 font-medium block mt-1">Belum ada berkas</span>
+                </button>
               </div>
 
               {/* Search & Role Filters */}
@@ -1353,9 +1043,6 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                   {[
                     { id: 'semua', label: `Semua (${docSummary.total})` },
                     { id: 'terupload', label: `✓ Sudah Upload (${docSummary.uploaded})` },
-                    { id: 'kab_tangerang', label: `🏛️ Kab. Tangerang (${docSummary.kabTangerang})` },
-                    { id: 'kota_tangerang', label: `🏢 Kota Tangerang (${docSummary.kotaTangerang})` },
-                    { id: 'luar_tangerang', label: `🌍 Luar Kota Tangerang (${docSummary.luarKota})` },
                     { id: 'belum', label: `✕ Belum Upload (${docSummary.notUploaded})` },
                     { id: 'pengurus', label: `Pengurus RT (${docSummary.pengurusCount})` },
                     { id: 'warga', label: 'Warga Biasa' }
@@ -1456,35 +1143,6 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                                 >
                                   KK: {hasKk ? '✓ Tersedia' : 'Belum Ada'}
                                 </span>
-                                {hasKk && (() => {
-                                  const reg = resolveWargaKkRegion(person);
-                                  return (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        if (isKetuaRT) {
-                                          e.stopPropagation();
-                                          setEditingKkRegionTarget(person);
-                                          setRegionCategoryInput(reg.category);
-                                          setRegionKecamatanInput(person.kkKecamatan || reg.kecamatan || '');
-                                          setRegionKelurahanInput(person.kkKelurahan || reg.kelurahan || '');
-                                          setRegionAlamatInput(person.alamatKk || reg.alamat || '');
-                                        }
-                                      }}
-                                      className={`inline-flex items-center gap-1.5 text-[10px] font-black px-2 py-0.5 rounded-md border shadow-2xs ${reg.badgeColor} ${isKetuaRT ? 'cursor-pointer hover:opacity-90 active:scale-95' : ''}`}
-                                      title={isKetuaRT ? 'Klik untuk verifikasi/ubah kategori wilayah KK' : ''}
-                                    >
-                                      <span>{reg.icon}</span>
-                                      <span>{reg.shortLabel}</span>
-                                      {(reg.kecamatan || reg.kelurahan) && (
-                                        <span className="opacity-80 font-normal">
-                                          ({reg.kecamatan ? `Kec. ${reg.kecamatan}` : reg.kelurahan})
-                                        </span>
-                                      )}
-                                      {isKetuaRT && <span className="text-[9px] opacity-70">✏️</span>}
-                                    </button>
-                                  );
-                                })()}
                                 <span
                                   className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                                     hasKtp
@@ -2182,40 +1840,6 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                   </div>
                 )}
 
-                {/* Identifikasi Wilayah Asal KK Dokumen */}
-                {selectedMemberDetail.dokumenKk && (() => {
-                  const reg = resolveWargaKkRegion(selectedMemberDetail);
-                  return (
-                    <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 shadow-xs ${reg.badgeColor}`}>
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="text-xl shrink-0">{reg.icon}</span>
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-black uppercase tracking-wider opacity-80">Identifikasi Wilayah Asal KK</p>
-                          <p className="text-xs font-black truncate">{reg.label}</p>
-                          {(selectedMemberDetail.alamatKk || reg.alamat) && (
-                            <p className="text-[10px] font-semibold opacity-90 truncate mt-0.5">
-                              Alamat Asal: {selectedMemberDetail.alamatKk || reg.alamat}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      {isKetuaRT && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingKkRegionTarget(selectedMemberDetail);
-                            setRegionCategoryInput(reg.category);
-                            setRegionAlamatInput(selectedMemberDetail.alamatKk || reg.alamat || '');
-                          }}
-                          className="text-[10px] font-extrabold px-2.5 py-1.5 bg-white rounded-xl border shadow-xs hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
-                        >
-                          ✏️ Ubah Kategori
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
-
                 {selectedMemberDetail.dokumenKk ? (
                   <div
                     onClick={() =>
@@ -2330,314 +1954,6 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                   </div>
                 );
               })()}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal Ubah Kategori Wilayah KK */}
-      <AnimatePresence>
-        {isKetuaRT && editingKkRegionTarget && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[70] bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4"
-            onClick={() => setEditingKkRegionTarget(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-md p-6 space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base">Identifikasi Wilayah Asal KK</h3>
-                  <p className="text-xs text-slate-500 font-medium">
-                    {editingKkRegionTarget.nama} {editingKkRegionTarget.alamat ? `(${editingKkRegionTarget.alamat})` : ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditingKkRegionTarget(null)}
-                  className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2">
-                  Pilih Kategori Wilayah KK:
-                </label>
-                <div className="space-y-2">
-                  {[
-                    {
-                      id: 'Kabupaten Tangerang',
-                      label: 'Kabupaten Tangerang',
-                      desc: 'Pasar Kemis, Balaraja, Cikupa, Tigaraksa, Sepatan, Curug, dst. (Prefix 3603)',
-                      icon: '🏛️',
-                      color: 'border-emerald-300 bg-emerald-50/50 text-emerald-900'
-                    },
-                    {
-                      id: 'Kota Tangerang',
-                      label: 'Kota Tangerang',
-                      desc: 'Karawaci, Periuk, Ciledug, Tangerang Kota, Cipondoh, Batuceper, dst. (Prefix 3671)',
-                      icon: '🏢',
-                      color: 'border-teal-300 bg-teal-50/50 text-teal-900'
-                    },
-                    {
-                      id: 'Luar Kota Tangerang',
-                      label: 'Luar Kota Tangerang',
-                      desc: 'DKI Jakarta, Jawa Barat, Jawa Tengah, Lampung, Tangsel, Luar Provinsi, dst.',
-                      icon: '🌍',
-                      color: 'border-amber-300 bg-amber-50/50 text-amber-900'
-                    }
-                  ].map((item) => (
-                    <label
-                      key={item.id}
-                      className={`flex items-start gap-3 p-3 rounded-2xl border-2 transition-all cursor-pointer ${
-                        regionCategoryInput === item.id
-                          ? `${item.color} ring-2 ring-teal-500 shadow-xs`
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="dokumenKkRegion"
-                        value={item.id}
-                        checked={regionCategoryInput === item.id}
-                        onChange={(e) => setRegionCategoryInput(e.target.value as any)}
-                        className="mt-1 accent-teal-600"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
-                          <span>{item.icon}</span>
-                          <span>{item.label}</span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">{item.desc}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Input Kecamatan & Kelurahan */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Kecamatan:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Cth: Pasar Kemis"
-                    value={regionKecamatanInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setRegionKecamatanInput(val);
-                      const upper = val.toUpperCase();
-                      if (KECAMATAN_KAB_TANGERANG.some(k => upper.includes(k))) {
-                        setRegionCategoryInput('Kabupaten Tangerang');
-                      } else if (KECAMATAN_KOTA_TANGERANG.some(k => upper.includes(k))) {
-                        setRegionCategoryInput('Kota Tangerang');
-                      }
-                    }}
-                    className="w-full text-xs font-medium p-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-teal-500 rounded-xl outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Desa / Kelurahan:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Cth: Kutabumi"
-                    value={regionKelurahanInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setRegionKelurahanInput(val);
-                      const upper = val.toUpperCase();
-                      if (KELURAHAN_KAB_TANGERANG.some(k => upper.includes(k))) {
-                        setRegionCategoryInput('Kabupaten Tangerang');
-                        if (!regionKecamatanInput) setRegionKecamatanInput('Pasar Kemis');
-                      }
-                    }}
-                    className="w-full text-xs font-medium p-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-teal-500 rounded-xl outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Quick Select Chips */}
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 mb-1">Pilih Cepat Kecamatan Terdekat:</p>
-                <div className="flex flex-wrap gap-1">
-                  {[
-                    { label: 'Pasar Kemis (Kab)', kec: 'Pasar Kemis', cat: 'Kabupaten Tangerang' },
-                    { label: 'Kutabumi (Kab)', kec: 'Pasar Kemis', kel: 'Kutabumi', cat: 'Kabupaten Tangerang' },
-                    { label: 'Rajeg (Kab)', kec: 'Rajeg', cat: 'Kabupaten Tangerang' },
-                    { label: 'Cikupa (Kab)', kec: 'Cikupa', cat: 'Kabupaten Tangerang' },
-                    { label: 'Balaraja (Kab)', kec: 'Balaraja', cat: 'Kabupaten Tangerang' },
-                    { label: 'Karawaci (Kota)', kec: 'Karawaci', cat: 'Kota Tangerang' },
-                    { label: 'Periuk (Kota)', kec: 'Periuk', cat: 'Kota Tangerang' },
-                    { label: 'Cipondoh (Kota)', kec: 'Cipondoh', cat: 'Kota Tangerang' },
-                    { label: 'Tangsel (Luar)', kec: 'Serpong', cat: 'Luar Kota Tangerang' },
-                    { label: 'Jakarta (Luar)', kec: 'Cengkareng', cat: 'Luar Kota Tangerang' }
-                  ].map((chip) => (
-                    <button
-                      key={chip.label}
-                      type="button"
-                      onClick={() => {
-                        setRegionCategoryInput(chip.cat as any);
-                        setRegionKecamatanInput(chip.kec);
-                        if (chip.kel) setRegionKelurahanInput(chip.kel);
-                      }}
-                      className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-600 transition-colors cursor-pointer"
-                    >
-                      + {chip.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Detail Alamat Asal KK (Sesuai Fisik Dokumen):
-                </label>
-                <input
-                  type="text"
-                  placeholder="Cth: Kp. Kukun RT 02/05, Desa Kutabumi, Pasar Kemis"
-                  value={regionAlamatInput}
-                  onChange={(e) => setRegionAlamatInput(e.target.value)}
-                  className="w-full text-xs font-medium p-3 bg-slate-50 border border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 rounded-xl transition-all outline-none"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Kategori dan alamat ini akan tersimpan permanen dan disinkronkan ke seluruh sistem RT.
-                </p>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingKkRegionTarget(null)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  disabled={savingRegion}
-                  onClick={handleSaveKkRegionDokumen}
-                  className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  {savingRegion ? 'Menyimpan...' : 'Simpan Kategori'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal Hasil Batch Scan Identifikasi KK */}
-      <AnimatePresence>
-        {showBatchScanModal && batchScanResult && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[75] bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4"
-            onClick={() => setShowBatchScanModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg p-6 space-y-4 max-h-[90vh] flex flex-col"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">⚡</span>
-                  <div>
-                    <h3 className="font-extrabold text-slate-800 text-base">Hasil Identifikasi Alamat KK</h3>
-                    <p className="text-xs text-slate-500 font-medium">
-                      Pemindaian otomatis berbasis nama Kecamatan & Kelurahan
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowBatchScanModal(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* 3 Kategori Summary Cards */}
-              <div className="grid grid-cols-3 gap-2 shrink-0">
-                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-center">
-                  <span className="text-xs">🏛️</span>
-                  <p className="text-lg font-black text-emerald-800 mt-0.5">{batchScanResult.summary?.kabupatenTangerang || 0}</p>
-                  <p className="text-[10px] font-bold text-emerald-700">Kab. Tangerang</p>
-                </div>
-                <div className="p-3 bg-blue-50 rounded-2xl border border-blue-200 text-center">
-                  <span className="text-xs">🏢</span>
-                  <p className="text-lg font-black text-blue-800 mt-0.5">{batchScanResult.summary?.kotaTangerang || 0}</p>
-                  <p className="text-[10px] font-bold text-blue-700">Kota Tangerang</p>
-                </div>
-                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-center">
-                  <span className="text-xs">🌍</span>
-                  <p className="text-lg font-black text-amber-800 mt-0.5">{batchScanResult.summary?.luarKotaTangerang || 0}</p>
-                  <p className="text-[10px] font-bold text-amber-700">Luar Tangerang</p>
-                </div>
-              </div>
-
-              {/* List of scanned users */}
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar min-h-0">
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Daftar Warga Teridentifikasi ({batchScanResult.users?.length || 0}):
-                </p>
-                {batchScanResult.users?.map((u: any) => {
-                  const isKab = u.wilayahKk === 'Kabupaten Tangerang';
-                  const isKota = u.wilayahKk === 'Kota Tangerang';
-                  return (
-                    <div
-                      key={u.id}
-                      className="p-2.5 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-between gap-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-extrabold text-xs text-slate-800 truncate">{u.nama}</p>
-                        <p className="text-[10px] text-slate-500 truncate">
-                          {u.alamatKk || (u.kkKecamatan ? `Kec. ${u.kkKecamatan}` : '') || u.noKk}
-                        </p>
-                      </div>
-                      <span
-                        className={`text-[10px] font-black px-2 py-0.5 rounded-md border whitespace-nowrap shrink-0 ${
-                          isKab
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                            : isKota
-                            ? 'bg-blue-100 text-blue-800 border-blue-300'
-                            : 'bg-amber-100 text-amber-800 border-amber-300'
-                        }`}
-                      >
-                        {isKab ? '🏛️ Kab. Tangerang' : isKota ? '🏢 Kota Tangerang' : '🌍 Luar Tangerang'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="pt-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowBatchScanModal(false)}
-                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer"
-                >
-                  Selesai & Lihat Data
-                </button>
-              </div>
             </motion.div>
           </motion.div>
         )}

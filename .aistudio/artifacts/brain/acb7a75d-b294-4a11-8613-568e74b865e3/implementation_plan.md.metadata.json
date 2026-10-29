@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi identifikasi dan kategorisasi alamat Kartu Keluarga (KK) seluruh warga yang sudah mengunggah KK ke dalam 3 kategori: Kabupaten Tangerang, Kota Tangerang, dan Luar Kota Tangerang. Dilengkapi tombol Scan Otomatis berdasar nama Kecamatan/Kelurahan, badge status di daftar warga, panel rekapitulasi statistik, dan modal edit koreksi manual oleh Ketua RT.",
-  "updatedAt":  "2026-10-28T07:33:24.123987557Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "Rencana implementasi arsitektur Multi-Tenant SaaS Guyub Rukun di MongoDB (Mongoose) yang dioptimalkan untuk Vercel Serverless Functions: connection caching (db.js / db.ts), skema multi-tenant dengan compound indexes, model Tenant/Subscription, isolasi data rtId, middleware masa aktif SaaS, serta endpoint autentikasi (/api/auth/register & /api/auth/login) dengan backward compatibility untuk frontend.",
+  "updatedAt": "2026-10-20T02:27:48.793872687Z",
+  "requestFeedback": true,
+  "userFacing": true
 }
