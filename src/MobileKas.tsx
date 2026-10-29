@@ -132,12 +132,6 @@ export const MobileKas = ({ onBack, currentUser }: { onBack: () => void, current
 
   useEffect(() => {
     fetchData();
-    const handleUpdate = () => {
-      fetchData();
-      fetchAllKasHistory();
-    };
-    window.addEventListener('app_data_update', handleUpdate);
-    return () => window.removeEventListener('app_data_update', handleUpdate);
   }, [page, searchQuery]);
 
   useEffect(() => {

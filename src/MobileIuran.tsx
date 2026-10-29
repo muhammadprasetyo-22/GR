@@ -146,9 +146,6 @@ export const MobileIuran = ({ onBack, currentUser }: { onBack: () => void, curre
 
   useEffect(() => {
     fetchData();
-    const handleUpdate = () => fetchData();
-    window.addEventListener('app_data_update', handleUpdate);
-    return () => window.removeEventListener('app_data_update', handleUpdate);
   }, [page, searchQuery, filterStatus]);
 
   useEffect(() => {

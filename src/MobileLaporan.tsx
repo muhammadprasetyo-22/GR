@@ -63,9 +63,6 @@ export const MobileLaporan = ({
 
   useEffect(() => {
     loadAllData();
-    const handleUpdate = () => loadAllData();
-    window.addEventListener('app_data_update', handleUpdate);
-    return () => window.removeEventListener('app_data_update', handleUpdate);
   }, []);
 
   // Filter Aduan

@@ -72,9 +72,6 @@ export const MobileAcaraPage = ({ currentUser }: { currentUser?: any }) => {
 
   useEffect(() => {
     fetchData();
-    const handleUpdate = () => fetchData();
-    window.addEventListener('app_data_update', handleUpdate);
-    return () => window.removeEventListener('app_data_update', handleUpdate);
   }, []);
 
   const handleTambah = async (e: React.FormEvent) => {

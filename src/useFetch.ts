@@ -38,36 +38,24 @@ export function useFetch<T>(url: string | null) {
     }
 
     // Fetch data always to ensure freshness
-    const fetchFreshData = () => {
-      apiFetch(url)
-        .then(res => res.json())
-        .then(json => {
-          const newData = json.data || json; // adjust based on API response structure
-          globalCache.set(cacheKey, newData);
-          // notify all components listening to this url
-          urlListeners.forEach(fn => fn(newData));
-        })
-        .catch(err => {
-          if (isMounted) {
-            setError(err);
-            setLoading(false);
-          }
-        });
-    };
-
-    fetchFreshData();
-
-    // Re-fetch automatically when global app data update or app resume occurs
-    const handleGlobalUpdate = () => {
-      fetchFreshData();
-    };
-
-    window.addEventListener('app_data_update', handleGlobalUpdate);
+    apiFetch(url)
+      .then(res => res.json())
+      .then(json => {
+        const newData = json.data || json; // adjust based on API response structure
+        globalCache.set(cacheKey, newData);
+        // notify all components listening to this url
+        urlListeners.forEach(fn => fn(newData));
+      })
+      .catch(err => {
+        if (isMounted) {
+          setError(err);
+          setLoading(false);
+        }
+      });
 
     return () => {
       isMounted = false;
       urlListeners.delete(onUpdate);
-      window.removeEventListener('app_data_update', handleGlobalUpdate);
     };
   }, [url, cacheKey]);
 

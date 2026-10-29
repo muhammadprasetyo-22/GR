@@ -285,12 +285,6 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
     if (isKetuaRT) {
       fetchWargaAndPengurus();
     }
-    const handleUpdate = () => {
-      fetchArsipDokumen();
-      if (isKetuaRT) fetchWargaAndPengurus();
-    };
-    window.addEventListener('app_data_update', handleUpdate);
-    return () => window.removeEventListener('app_data_update', handleUpdate);
   }, [isKetuaRT]);
 
   const processFileToDataUrl = (file: File): Promise<string> => {

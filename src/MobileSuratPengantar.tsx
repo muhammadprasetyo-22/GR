@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { apiFetch } from './apiInterceptor';
 import { motion, AnimatePresence } from 'motion/react';
 import { icons } from './App';
+import { Crown, Sparkles, Download, AlertCircle } from 'lucide-react';
+import { VipComparisonModal } from './components/common/VipComparisonModal';
 
 const loadImageAsBase64 = (url: string): Promise<string> => {
   return new Promise((resolve) => {
@@ -231,6 +233,8 @@ export const MobileSuratPengantar = ({
   // RT Signature Drawer State
   const [activeRtSignatureItem, setActiveRtSignatureItem] = useState<any | null>(null);
   const [formSignatureRt, setFormSignatureRt] = useState('');
+  const [showVipModal, setShowVipModal] = useState(false);
+  const [downloadLimitAlert, setDownloadLimitAlert] = useState<string | null>(null);
   
   // Cap/stamp fields for RT signature confirmation
   const [capX, setCapX] = useState(-15);
@@ -307,9 +311,6 @@ export const MobileSuratPengantar = ({
 
   useEffect(() => {
     fetchData();
-    const handleUpdate = () => fetchData();
-    window.addEventListener('app_data_update', handleUpdate);
-    return () => window.removeEventListener('app_data_update', handleUpdate);
   }, []);
 
   // Sync state if currentUser changes
@@ -537,8 +538,37 @@ export const MobileSuratPengantar = ({
     }
   };
 
-  const handleDownloadPDF = (surat: any) => {
+  const handleDownloadPDF = async (surat: any) => {
     if (isGeneratingPdf) return;
+
+    // 1. Verifikasi Batas Unduh (Reguler vs VIP)
+    try {
+      const trackRes = await apiFetch(`/api/surat/${encodeURIComponent(surat.id)}/track-download`, {
+        method: 'POST'
+      });
+      const trackData = await trackRes.json().catch(() => ({}));
+
+      if (!trackRes.ok) {
+        if (trackData?.requiresVip) {
+          setDownloadLimitAlert(trackData.error || 'Batas unduh surat paket Reguler (3x) telah tercapai. Tingkatkan ke VIP untuk mengunduh berkali-kali tanpa batas.');
+          setShowVipModal(true);
+          return;
+        }
+        if (trackRes.status === 403) {
+          alert(trackData?.error || 'Batas unduh dokumen telah tercapai.');
+          return;
+        }
+        console.warn("Track download notice:", trackData);
+      } else {
+        // Update local item download count so UI shows live stats
+        if (typeof trackData?.downloadCount === 'number') {
+          setData(prev => prev.map(d => d.id === surat.id ? { ...d, downloadCount: trackData.downloadCount } : d));
+        }
+      }
+    } catch (err) {
+      console.warn("Track download fallback:", err);
+    }
+
     setIsGeneratingPdf(true);
     let fileName = `Surat_Pengantar_${surat.nama.replace(/\s+/g, '_')}_${surat.id.substring(0, 5)}.pdf`;
 
@@ -687,9 +717,19 @@ export const MobileSuratPengantar = ({
             </button>
             <h2 className="text-base font-extrabold text-slate-900 tracking-tight">Kop Surat Pengantar</h2>
           </div>
-          <span className="bg-teal-50 text-teal-700 font-extrabold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded border border-teal-100/30">
-            RT 01/RW 21
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowVipModal(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-800 text-[10px] font-black hover:bg-amber-500/20 transition cursor-pointer"
+              title="Lihat Perbedaan Reguler vs VIP"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-500" />
+              <span>{currentUser?.isVip ? 'Status VIP' : 'Info VIP'}</span>
+            </button>
+            <span className="bg-teal-50 text-teal-700 font-extrabold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded border border-teal-100/30">
+              RT 01/RW 21
+            </span>
+          </div>
         </div>
 
         <div className="p-4 space-y-6">
@@ -1041,6 +1081,24 @@ export const MobileSuratPengantar = ({
                     {/* Citizen Action: Download fully filled PDF */}
                     {item.status === 'selesai' && (
                       <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
+                        {/* Download count badge & VIP status info */}
+                        <div className="flex items-center justify-between text-[10px] px-1 font-semibold text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <Download className="w-3.5 h-3.5 text-teal-600" />
+                            <span>Diunduh: <strong className="text-slate-800">{item.downloadCount || 0}x</strong></span>
+                          </span>
+
+                          {currentUser?.isVip ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 font-bold text-[9px]">
+                              <Crown className="w-3 h-3 text-amber-500" /> VIP (Unduh Tanpa Batas)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[9px]">
+                              Reguler: Sisa {Math.max(0, 3 - (item.downloadCount || 0))}x
+                            </span>
+                          )}
+                        </div>
+
                         <button 
                           onClick={() => handleDownloadPDF(item)} 
                           className="w-full py-2.5 px-4 text-xs bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold transition shadow-md shadow-teal-100 flex items-center justify-center gap-1.5 pointer-events-auto cursor-pointer"
@@ -1048,7 +1106,8 @@ export const MobileSuratPengantar = ({
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                           </svg>
-                          Unduh PDF Hasil TTD Lengkap
+                          <span>Unduh PDF Hasil TTD Lengkap</span>
+                          {currentUser?.isVip && <Crown className="w-3.5 h-3.5 text-amber-300 ml-1" />}
                         </button>
 
                         {(currentUser?.role === 'admin' || currentUser?.role === 'developer') && (
@@ -1457,6 +1516,17 @@ export const MobileSuratPengantar = ({
           </div>
         )}
       </AnimatePresence>
+
+      {/* MODAL PERBANDINGAN FITUR REGULER VS VIP */}
+      <VipComparisonModal
+        isOpen={showVipModal}
+        onClose={() => setShowVipModal(false)}
+        isVip={Boolean(currentUser?.isVip)}
+        currentRt={currentUser?.rtId ? `RT ${currentUser.rtId.replace('rt', '').padStart(2, '0')}` : 'RT 01'}
+        onUpgradeClick={() => {
+          alert('Silakan hubungi Pengurus RT atau Developer Guyub Rukun untuk aktivasi lisensi VIP.');
+        }}
+      />
 
     </div>
   );

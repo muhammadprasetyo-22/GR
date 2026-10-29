@@ -35,9 +35,6 @@ export const MobileDarurat = ({ onBack, currentUser }: { onBack: () => void, cur
 
   useEffect(() => {
     fetchData();
-    const handleUpdate = () => fetchData();
-    window.addEventListener('app_data_update', handleUpdate);
-    return () => window.removeEventListener('app_data_update', handleUpdate);
   }, []);
 
   const openAddModal = () => {

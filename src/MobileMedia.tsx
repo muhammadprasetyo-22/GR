@@ -31,9 +31,6 @@ export const MobileMedia = ({ onBack, currentUser }: { onBack: () => void, curre
 
   useEffect(() => {
     fetchData();
-    const handleUpdate = () => fetchData();
-    window.addEventListener('app_data_update', handleUpdate);
-    return () => window.removeEventListener('app_data_update', handleUpdate);
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
