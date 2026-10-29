@@ -185,7 +185,7 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
   const [wargaList, setWargaList] = useState<any[]>([]);
   const [loadingWarga, setLoadingWarga] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'semua' | 'terupload' | 'belum' | 'pengurus' | 'warga'>('semua');
+  const [roleFilter, setRoleFilter] = useState<'semua' | 'warga' | 'pengurus' | 'belum'>('semua');
   const [uploadingTargetId, setUploadingTargetId] = useState<string | null>(null);
   const [extractingKkUserId, setExtractingKkUserId] = useState<string | null>(null);
   const [selectedMemberDetail, setSelectedMemberDetail] = useState<any | null>(null);
@@ -248,52 +248,10 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
     if (!isKetuaRT) return;
     setLoadingWarga(true);
     try {
-      const [resWarga, resKk] = await Promise.all([
-        apiFetch('/api/warga'),
-        apiFetch('/api/warga-dokumen-kk').catch(() => null)
-      ]);
-
-      const kkMap = new Map<string, any>();
-      if (resKk && resKk.ok) {
-        const kkJson = await resKk.json().catch(() => ({}));
-        if (Array.isArray(kkJson.users)) {
-          kkJson.users.forEach((ku: any) => {
-            if (ku.id) kkMap.set(String(ku.id), ku);
-            if (ku.username) kkMap.set(String(ku.username).toLowerCase(), ku);
-          });
-        }
-      }
-
-      if (resWarga.ok) {
-        const json = await resWarga.json();
-        const users = (json.users || [])
-          .filter((u: any) => u.role !== 'developer')
-          .map((u: any) => {
-            const kkInfo = kkMap.get(String(u.id)) || (u.username ? kkMap.get(String(u.username).toLowerCase()) : null);
-            const dokumenKk = u.dokumenKk || kkInfo?.dokumenKk || '';
-            const rawKtp = u.dokumenKtp || kkInfo?.dokumenKtp || [];
-            const dokumenKtp = Array.isArray(rawKtp) ? rawKtp : rawKtp ? [rawKtp] : [];
-            const hasKk = Boolean(
-              u.hasKk ??
-              kkInfo?.hasKk ??
-              (dokumenKk && String(dokumenKk).trim() !== '')
-            );
-            const hasKtp = Boolean(
-              u.hasKtp ??
-              kkInfo?.hasKtp ??
-              dokumenKtp.length > 0
-            );
-            return {
-              ...u,
-              ...(kkInfo || {}),
-              dokumenKk,
-              dokumenKtp,
-              hasKk,
-              hasKtp,
-              noKk: u.noKk || kkInfo?.noKk || ''
-            };
-          });
-
+      const res = await apiFetch('/api/warga');
+      if (res.ok) {
+        const json = await res.json();
+        const users = (json.users || []).filter((u: any) => u.role !== 'developer');
         setWargaList(users);
         if (selectedMemberDetail) {
           const updatedSelected = users.find((u: any) => u.id === selectedMemberDetail.id);
@@ -789,13 +747,10 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
       const uRole = u.role || 'warga';
       const isCommittee = ['admin', 'sekretaris', 'bendahara', 'pengurus'].includes(uRole);
       const ktpArr = Array.isArray(u.dokumenKtp) ? u.dokumenKtp : u.dokumenKtp ? [u.dokumenKtp] : [];
-      const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
-      const hasKtp = Boolean(u.hasKtp || ktpArr.length > 0);
-      const hasDoc = hasKk || hasKtp;
+      const hasDoc = Boolean(u.dokumenKk) || ktpArr.length > 0;
 
       if (roleFilter === 'warga' && isCommittee) return false;
       if (roleFilter === 'pengurus' && !isCommittee) return false;
-      if (roleFilter === 'terupload' && !hasDoc) return false;
       if (roleFilter === 'belum' && hasDoc) return false;
 
       return matchSearch;
@@ -808,9 +763,7 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
     let pengurusCount = 0;
     wargaList.forEach(u => {
       const ktpArr = Array.isArray(u.dokumenKtp) ? u.dokumenKtp : u.dokumenKtp ? [u.dokumenKtp] : [];
-      const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
-      const hasKtp = Boolean(u.hasKtp || ktpArr.length > 0);
-      if (hasKk || hasKtp) uploaded++;
+      if (u.dokumenKk || ktpArr.length > 0) uploaded++;
       if (['admin', 'sekretaris', 'bendahara', 'pengurus'].includes(u.role)) pengurusCount++;
     });
     return {
@@ -957,71 +910,24 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                 </button>
               </div>
 
-              {/* Summary Cards (Clickable Filters) */}
+              {/* Summary Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setRoleFilter('semua')}
-                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                    roleFilter === 'semua'
-                      ? 'bg-teal-50/80 border-teal-500 ring-2 ring-teal-500 shadow-md'
-                      : 'bg-white border-slate-100 shadow-sm hover:border-slate-300'
-                  }`}
-                >
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm">
                   <p className="text-[10px] font-bold text-slate-400 uppercase">Total Terdaftar</p>
                   <p className="text-xl font-black text-slate-800 mt-0.5">{docSummary.total} <span className="text-xs font-semibold text-slate-500">Akun</span></p>
-                  <span className="text-[10px] text-slate-400 font-medium block mt-1">Semua data warga</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setRoleFilter('pengurus')}
-                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                    roleFilter === 'pengurus'
-                      ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500 shadow-md'
-                      : 'bg-white border-slate-100 shadow-sm hover:border-blue-200'
-                  }`}
-                >
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm">
                   <p className="text-[10px] font-bold text-blue-500 uppercase">Pengurus RT</p>
                   <p className="text-xl font-black text-blue-700 mt-0.5">{docSummary.pengurusCount} <span className="text-xs font-semibold text-blue-500">Orang</span></p>
-                  <span className="text-[10px] text-blue-500/80 font-medium block mt-1">Peran RT</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setRoleFilter('terupload')}
-                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                    roleFilter === 'terupload'
-                      ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500 shadow-md'
-                      : 'bg-white border-emerald-100 shadow-sm hover:border-emerald-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-emerald-600 uppercase">Sudah Upload</p>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  </div>
-                  <p className="text-xl font-black text-emerald-700 mt-0.5">{docSummary.uploaded} <span className="text-xs font-semibold text-emerald-600">Warga</span></p>
-                  <span className="text-[10px] text-emerald-600 font-medium block mt-1">KK/KTP tersedia</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setRoleFilter('belum')}
-                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                    roleFilter === 'belum'
-                      ? 'bg-rose-50 border-rose-500 ring-2 ring-rose-500 shadow-md'
-                      : 'bg-white border-rose-100 shadow-sm hover:border-rose-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-rose-500 uppercase">Belum Upload</p>
-                    {docSummary.notUploaded > 0 && (
-                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    )}
-                  </div>
-                  <p className="text-xl font-black text-rose-600 mt-0.5">{docSummary.notUploaded} <span className="text-xs font-semibold text-rose-500">Warga</span></p>
-                  <span className="text-[10px] text-rose-500 font-medium block mt-1">Belum ada berkas</span>
-                </button>
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-emerald-100 shadow-sm">
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase">Sudah Upload</p>
+                  <p className="text-xl font-black text-emerald-700 mt-0.5">{docSummary.uploaded} <span className="text-xs font-semibold text-emerald-600">KK/KTP</span></p>
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-rose-100 shadow-sm">
+                  <p className="text-[10px] font-bold text-rose-500 uppercase">Belum Upload</p>
+                  <p className="text-xl font-black text-rose-600 mt-0.5">{docSummary.notUploaded} <span className="text-xs font-semibold text-rose-500">Akun</span></p>
+                </div>
               </div>
 
               {/* Search & Role Filters */}
@@ -1041,11 +947,10 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
 
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                   {[
-                    { id: 'semua', label: `Semua (${docSummary.total})` },
-                    { id: 'terupload', label: `✓ Sudah Upload (${docSummary.uploaded})` },
-                    { id: 'belum', label: `✕ Belum Upload (${docSummary.notUploaded})` },
-                    { id: 'pengurus', label: `Pengurus RT (${docSummary.pengurusCount})` },
-                    { id: 'warga', label: 'Warga Biasa' }
+                    { id: 'semua', label: 'Semua (Warga & Pengurus)' },
+                    { id: 'pengurus', label: 'Pengurus RT' },
+                    { id: 'warga', label: 'Warga' },
+                    { id: 'belum', label: 'Belum Upload Dokumen' }
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -1070,7 +975,7 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                 </div>
               ) : filteredWargaList.length === 0 ? (
                 <div className="bg-white p-10 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-400">
-                  Tidak ada data warga/pengurus yang sesuai dengan pencarian atau filter "{roleFilter}".
+                  Tidak ada data warga/pengurus yang sesuai dengan pencarian.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1080,9 +985,8 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                       : person.dokumenKtp
                       ? [person.dokumenKtp]
                       : [];
-                    const hasKk = Boolean(person.hasKk || (person.dokumenKk && String(person.dokumenKk).trim() !== ''));
-                    const hasKtp = Boolean(person.hasKtp || ktpArr.length > 0);
-                    const hasDoc = hasKk || hasKtp;
+                    const hasKk = Boolean(person.dokumenKk);
+                    const hasKtp = ktpArr.length > 0;
                     const isUploadingThis = uploadingTargetId === person.id;
                     const alamatMatch = String(person.alamat || '').match(/Blok\s+([a-zA-Z0-9]+)\s*(?:No\.?|Nomor)?\s*([a-zA-Z0-9]+)/i);
                     const shortHouseCode = alamatMatch
@@ -1126,18 +1030,9 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                 <span
-                                  className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 ${
-                                    hasDoc
-                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                      : 'bg-rose-50 text-rose-700 border border-rose-200'
-                                  }`}
-                                >
-                                  {hasDoc ? '✓ Sudah Upload' : '✕ Belum Upload'}
-                                </span>
-                                <span
                                   className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                                     hasKk
-                                      ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                       : 'bg-slate-100 text-slate-500'
                                   }`}
                                 >
@@ -1146,11 +1041,11 @@ export const MobileDokumen = ({ onBack, currentUser, onUpdateUser }: { onBack: (
                                 <span
                                   className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                                     hasKtp
-                                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                       : 'bg-slate-100 text-slate-500'
                                   }`}
                                 >
-                                  KTP: {hasKtp ? (ktpArr.length > 0 ? `✓ ${ktpArr.length} File` : '✓ Tersedia') : 'Belum Ada'}
+                                  KTP: {hasKtp ? `✓ ${ktpArr.length} File` : 'Belum Ada'}
                                 </span>
                               </div>
                             </div>

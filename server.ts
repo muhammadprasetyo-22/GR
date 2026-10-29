@@ -2625,10 +2625,9 @@ app.get("/api/warga-dokumen-kk", enforceRoles(['admin', 'sekretaris']), async (r
   const rtId = getAuthorizedRtId(req);
   try {
     await connectDB();
-    const users = await UserModel.find({ rtId, role: { $ne: 'developer' } }).select('+dokumenKk +dokumenKtp').lean();
+    const users = await UserModel.find({ rtId, role: { $ne: 'developer' } }).select('+dokumenKk').lean();
     const formatted = users.map((u: any) => {
-      const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
-      const hasKtp = Boolean(u.hasKtp || (Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp && String(u.dokumenKtp).trim() !== '')));
+      const hasKk = Boolean(u.dokumenKk && String(u.dokumenKk).trim() !== '');
       const resolvedNoKk = u.noKk || (hasKk ? extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama) : '');
       if (hasKk && !u.noKk && resolvedNoKk && u._id) {
         UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk } }).catch(() => {});
@@ -2637,7 +2636,6 @@ app.get("/api/warga-dokumen-kk", enforceRoles(['admin', 'sekretaris']), async (r
         ...u,
         noKk: resolvedNoKk || u.noKk || '',
         hasKk,
-        hasKtp,
         isOnline: activeSessions.has(u.id) && Date.now() - activeSessions.get(u.id)! < 15000
       };
     });
@@ -3399,7 +3397,7 @@ app.get("/api/warga", async (req, res) => {
     ];
   }
 
-  let dbQuery = UserModel.find(query).select('+dokumenKk +dokumenKtp');
+  let dbQuery = UserModel.find(query);
   let sortedUsers: any[] = [];
   let total = 0;
 
@@ -3408,8 +3406,7 @@ app.get("/api/warga", async (req, res) => {
     const skip = (page - 1) * limit;
     const users = await dbQuery.skip(skip).limit(limit).lean();
     sortedUsers = users.map((u: any) => {
-      const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
-      const hasKtp = Boolean(u.hasKtp || (Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp && String(u.dokumenKtp).trim() !== '')));
+      const hasKk = Boolean(u.dokumenKk && String(u.dokumenKk).trim() !== '');
       const resolvedNoKk = u.noKk || (hasKk ? extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama) : '');
       if (hasKk && !u.noKk && resolvedNoKk && u._id) {
         UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk } }).catch(() => {});
@@ -3418,7 +3415,6 @@ app.get("/api/warga", async (req, res) => {
         ...u,
         noKk: resolvedNoKk || u.noKk || '',
         hasKk,
-        hasKtp,
         isOnline: activeSessions.has(u.id) && Date.now() - activeSessions.get(u.id)! < 15000
       };
     });
@@ -3442,8 +3438,7 @@ app.get("/api/warga", async (req, res) => {
     sortedUsers = users.map((u: any) => {
       const isOnline = activeSessions.has(u.id) && Date.now() - activeSessions.get(u.id)! < 15000;
       const isOwn = Boolean(requesterId && String(u.id) === String(requesterId));
-      const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
-      const hasKtp = Boolean(u.hasKtp || (Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp && String(u.dokumenKtp).trim() !== '')));
+      const hasKk = Boolean(u.dokumenKk && String(u.dokumenKk).trim() !== '');
       const resolvedNoKk = u.noKk || (hasKk ? extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama) : '');
       if (hasKk && !u.noKk && resolvedNoKk && u._id) {
         UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk } }).catch(() => {});
@@ -3464,7 +3459,7 @@ app.get("/api/warga", async (req, res) => {
           jenisKelamin: u.jenisKelamin,
           members: u.members || [],
           hasKk,
-          hasKtp,
+          hasKtp: Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp),
           isApproved: u.isApproved,
           rtId: u.rtId,
           isOnline
@@ -3474,7 +3469,6 @@ app.get("/api/warga", async (req, res) => {
         ...u,
         noKk: resolvedNoKk || u.noKk || '',
         hasKk,
-        hasKtp,
         isOnline
       };
     });
