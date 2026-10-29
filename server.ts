@@ -9,12 +9,24 @@ import { GoogleGenAI, Type } from "@google/genai";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+import cookieParser from "cookie-parser";
+import crypto from "crypto";
+
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "guyubrukunsecretkey_for_jwt2026";
+const rawJwtSecret = process.env.JWT_SECRET?.trim();
+const isProductionRuntime = process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
+// Length alone is not enough: reject common/predictable phrases and the previously exposed project-style secret.
+const isJwtSecretConfigured = Boolean(
+  rawJwtSecret && rawJwtSecret.length >= 32 &&
+  !/(super[_ -]?secret|secret[_ -]?key|change[_ -]?me|your[_ -]?secret|example|default|guyub.?rukun)/i.test(rawJwtSecret)
+);
+// In production, never fall back to a predictable development secret. Authentication
+// middleware below returns a clear 503 when configuration is missing; /api/health remains available.
+const JWT_SECRET = rawJwtSecret || (isProductionRuntime
+  ? crypto.randomBytes(32).toString("hex")
+  : "guyubrukun_dev_only_jwt_secret_key_2026_secured");
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/guyubrukun";
-let isDbConnected = false;
 
 function isValidGeminiApiKey(key?: string): boolean {
   if (!key) return false;
@@ -22,19 +34,29 @@ function isValidGeminiApiKey(key?: string): boolean {
   return k.length >= 20 && !k.startsWith('MY_') && !k.startsWith('YOUR_') && !k.includes('placeholder');
 }
 
-import { connectDB as connectCachedDB } from "./src/db/db.js";
+import { connectDB as connectCachedDB } from "./src/db/db.ts";
+import { resolveWargaKkRegion } from "./src/utils/kkRegionResolver.ts";
 
 async function connectDB() {
   await connectCachedDB();
-  isDbConnected = true;
 }
 
-// Secure Authentication Helpers
+// Secure Authentication Helpers (Async Bcrypt with NO Plaintext Fallback)
+async function verifyPasswordAsync(input: string, stored: string): Promise<boolean> {
+  if (!input || !stored) return false;
+  if (stored.startsWith('$2') && stored.length >= 50) {
+    return bcrypt.compare(input, stored);
+  }
+  // Plaintext credentials in database are rejected - must be hashed
+  return false;
+}
+
 function verifyPassword(input: string, stored: string): boolean {
-  if (stored && stored.startsWith('$2') && stored.length >= 50) {
+  if (!input || !stored) return false;
+  if (stored.startsWith('$2') && stored.length >= 50) {
     return bcrypt.compareSync(input, stored);
   }
-  return input === stored;
+  return false;
 }
 
 function hashPassword(password: string): string {
@@ -53,12 +75,22 @@ const apiLimiter = rateLimit({
   validate: { trustProxy: false, xForwardedForHeader: false }
 });
 
+// Rate Limiter Khusus Endpoint Autentikasi (Proteksi Brute-Force)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 menit
+  max: 30, // Maksimal 30 percobaan login/register per 15 menit per IP
+  message: { error: "Terlalu banyak percobaan autentikasi. Silakan tunggu 15 menit sebelum mencoba kembali." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const app = express();
 app.set("trust proxy", 1);
-const PORT = process.env.NODE_ENV === "production" ? (Number(process.env.APP_PORT || process.env.PORT) || 3000) : 3000;
+const PORT = Number(process.env.PORT || process.env.APP_PORT) || 3000;
 
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(cookieParser());
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ limit: "15mb", extended: true }));
 
 // Vercel Serverless rewrite support: map /api?__route=..., [...slug], or x-matched-path back to /api/...
 app.use((req, res, next) => {
@@ -88,19 +120,28 @@ app.use((req, res, next) => {
 
 // Global DB connection middleware for APIs to ensure stable connection on serverless/cold-start
 app.use(async (req, res, next) => {
-  if (req.path.startsWith("/api/") || req.url.startsWith("/api/")) {
+  const isHealthCheck = req.path === "/api/health";
+  if (!isHealthCheck && (req.path.startsWith("/api/") || req.url.startsWith("/api/"))) {
     try {
       await connectDB();
-    } catch (err) {
-      console.error("Database connection failed in middleware:", err);
-      return res.status(500).json({ error: "Gagal menghubungkan ke database" });
+    } catch (err: any) {
+      console.error("Database connection failed in middleware:", err?.message || err);
+      const missingUri = !process.env.MONGODB_URI;
+      return res.status(503).json({
+        code: missingUri ? 'MONGODB_URI_MISSING' : 'DATABASE_UNAVAILABLE',
+        error: missingUri
+          ? 'Konfigurasi MONGODB_URI belum tersedia di Environment Variables Vercel.'
+          : 'Database Guyub Rukun tidak dapat dihubungi. Periksa MongoDB Atlas dan Runtime Logs Vercel.'
+      });
     }
   }
   next();
 });
 
-// Apply rate limiting to all requests
-app.use("/api/", apiLimiter);
+// Apply rate limiting to auth routes specifically
+app.use("/api/auth/", authLimiter);
+app.use("/api/login", authLimiter);
+app.use("/api/register", authLimiter);
 
 // ==========================================
 // CENTRAL AUTHORIZED RT CONTEXT & HELPERS
@@ -260,8 +301,8 @@ export async function checkTenantSubscription(req: express.Request, res: express
   }
 }
 
-// Auth Verification Middleware - NO UNAUTHENTICATED FALLBACK TO ADMIN/RT01
-function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+// Auth Verification Middleware - Secure Session Cookie & Bearer Token with DB Check
+async function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
   const publicRoutes = [
     "/api/login",
     "/api/register",
@@ -279,35 +320,78 @@ function authMiddleware(req: express.Request, res: express.Response, next: expre
   if (!pathName.startsWith("/api/")) {
     return next();
   }
+  // Permit health diagnostics even when configuration is broken, but block all other
+  // API operations until a strong production JWT secret is configured.
+  if (isProductionRuntime && !isJwtSecretConfigured && pathName !== "/api/health") {
+    return res.status(503).json({
+      code: "JWT_SECRET_INVALID",
+      error: "JWT_SECRET belum cukup aman. Gunakan secret acak minimal 32 karakter, simpan di Environment Variables Vercel, lalu redeploy."
+    });
+  }
   if (publicRoutes.includes(pathName) || pathName.startsWith("/api/tangerang-logo-proxy")) {
     return next();
   }
   
+  // 1. Check HTTP-only Session Cookie First (Gold Standard)
+  const cookieToken = req.cookies?.['guyub_session'];
+  
+  // 2. Check Authorization Bearer header
   const authHeader = req.headers['authorization'];
-  let token = "";
+  let bearerToken = "";
   if (authHeader && authHeader.startsWith("Bearer ")) {
-    token = authHeader.substring(7);
-  } else {
-    token = (req.query.token as string) || (req.headers['x-auth-token'] as string) || "";
+    bearerToken = authHeader.substring(7);
   }
+
+  const token = cookieToken || bearerToken || (req.query.token as string) || (req.headers['x-auth-token'] as string) || "";
   
   if (token) {
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
+      
+      // Token harus terikat ke sesi server yang persisten; token lama tanpa sessionId tidak diterima.
+      const decodedUserId = String(decoded.userId || decoded.id || '');
+      if (!decoded.sessionId || !decodedUserId) {
+        res.clearCookie('guyub_session', { path: '/' });
+        return res.status(401).json({
+          code: 'SESSION_REQUIRED',
+          error: 'Sesi lama tidak lagi berlaku. Silakan login kembali.'
+        });
+      }
+
+      await connectDB();
+      const activeSession = await SessionModel.findOne({
+        sessionId: decoded.sessionId,
+        userId: decodedUserId,
+        isRevoked: false,
+        expiresAt: { $gt: new Date() }
+      }).lean();
+      const sessionOwner = await UserModel.findOne(
+        { id: decodedUserId, rtId: decoded.rtId }
+      ).select('+activeSessionId').lean();
+      const sessionIsNotCurrent = sessionOwner?.activeSessionId !== decoded.sessionId;
+      if (!activeSession || !sessionOwner || sessionIsNotCurrent) {
+        res.clearCookie('guyub_session', { path: '/' });
+        return res.status(401).json({
+          code: 'SESSION_REVOKED',
+          error: 'Sesi akun ini sudah tidak aktif karena akun digunakan untuk login di perangkat lain. Silakan login kembali.'
+        });
+      }
+
       (req as any).user = decoded;
-      req.headers['x-user-id'] = decoded.id;
+      req.headers['x-user-id'] = decoded.userId || decoded.id;
       req.headers['x-user-role'] = decoded.role;
       req.headers['x-user-username'] = decoded.username;
       req.headers['x-user-nama'] = decoded.nama;
       req.headers['x-rt-id'] = decoded.rtId;
       return next();
     } catch {
-      return res.status(401).json({ error: "Unauthorized" });
+      res.clearCookie('guyub_session');
+      return res.status(401).json({ error: "Token atau sesi tidak valid" });
     }
   }
 
   // PRIVATE ENDPOINTS: No token = 401 Unauthorized
-  return res.status(401).json({ error: "Unauthorized" });
+  return res.status(401).json({ error: "Unauthorized: Silakan login terlebih dahulu" });
 }
 
 app.use(authMiddleware);
@@ -354,6 +438,7 @@ const UserSchema = new mongoose.Schema({
   dokumenKtp: { type: mongoose.Schema.Types.Mixed, select: false },
   hasChangedUsername: { type: Boolean, default: false },
   usernameChangedAt: { type: Date },
+  activeSessionId: { type: String, default: '', select: false },
 }, { timestamps: true, strict: false });
 if (mongoose.models.User) {
   delete mongoose.models.User;
@@ -638,6 +723,54 @@ const MenuAccessSchema = new mongoose.Schema({
   deleteMenus: [{ type: String }]
 }, { timestamps: true });
 const MenuAccessModel: mongoose.Model<any> = mongoose.models.MenuAccess || mongoose.model("MenuAccess", MenuAccessSchema);
+
+// 18. Server-Side Session Schema (Mongoose TTL Session with Revocation)
+const SessionSchema = new mongoose.Schema({
+  sessionId: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
+  rtId: { type: String, required: true },
+  role: { type: String, required: true },
+  ip: { type: String },
+  userAgent: { type: String },
+  expiresAt: { type: Date, required: true },
+  isRevoked: { type: Boolean, default: false }
+}, { timestamps: true });
+SessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // MongoDB TTL auto cleanup
+SessionSchema.index({ userId: 1, isRevoked: 1 });
+SessionSchema.index({ rtId: 1 });
+const SessionModel: mongoose.Model<any> = mongoose.models.Session || mongoose.model("Session", SessionSchema);
+
+// 19. SaaS Plan & Entitlement Schema
+const PlanSchema = new mongoose.Schema({
+  code: { type: String, required: true, unique: true }, // 'free', 'basic', 'vip'
+  name: { type: String, required: true },
+  priceIdr: { type: Number, default: 0 },
+  billingCycle: { type: String, enum: ['monthly', 'yearly', 'free'], default: 'monthly' },
+  maxWarga: { type: Number, default: 50 },
+  maxStorageMb: { type: Number, default: 100 },
+  allowedModules: [{ type: String }],
+  allowAiAssistant: { type: Boolean, default: false },
+  allowCustomLetterhead: { type: Boolean, default: false }
+}, { timestamps: true });
+const PlanModel: mongoose.Model<any> = mongoose.models.Plan || mongoose.model("Plan", PlanSchema);
+
+// 20. SaaS Subscription & Billing Invoices Schema
+const SubscriptionSchema = new mongoose.Schema({
+  subscriptionId: { type: String, required: true, unique: true },
+  rtId: { type: String, required: true },
+  planCode: { type: String, required: true, default: 'free' },
+  status: { type: String, enum: ['trialing', 'active', 'past_due', 'expired', 'canceled', 'suspended'], default: 'active' },
+  startDate: { type: Date, default: Date.now },
+  expiredAt: { type: Date, required: true },
+  gracePeriodUntil: { type: Date },
+  amountPaid: { type: Number, default: 0 },
+  paymentMethod: { type: String, default: 'manual_transfer' }, // 'manual_transfer', 'midtrans', 'xendit'
+  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'verified'], default: 'paid' },
+  invoiceNumber: { type: String },
+  notes: { type: String }
+}, { timestamps: true });
+SubscriptionSchema.index({ rtId: 1, status: 1 });
+const SubscriptionModel: mongoose.Model<any> = mongoose.models.Subscription || mongoose.model("Subscription", SubscriptionSchema);
 
 
 // ==========================================
@@ -1970,21 +2103,45 @@ async function handleLogin(req: express.Request, res: express.Response, next: ex
       await user.save();
     }
 
-    if (!process.env.VERCEL) {
-      if (activeSessions.has(user.id) && Date.now() - activeSessions.get(user.id)! < 10000) {
-        return res.status(409).json({ error: "User sedang aktif digunakan pada perangkat lain" });
-      }
-      activeSessions.set(user.id, Date.now());
-    }
+    // SINGLE ACTIVE SESSION POLICY:
+    // Login baru mengakhiri semua sesi lama akun ini di semua environment, termasuk Vercel.
+    // Perangkat lama akan menerima HTTP 401 pada permintaan API berikutnya lalu diarahkan ke layar login.
+    await SessionModel.updateMany(
+      { userId: user.id, isRevoked: { $ne: true } },
+      { $set: { isRevoked: true } }
+    );
+    activeSessions.set(user.id, Date.now());
 
     // Check Tenant Subscription status
     const tenant = await TenantModel.findOne({ rtId: user.rtId });
 
-    // JWT token payload strictly uses userId, rtId, and role
+    // 1. Create server-side Session in MongoDB
+    const sessionId = `sess_${crypto.randomBytes(24).toString('hex')}`;
+    const sessionExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 hari
+
+    await SessionModel.create({
+      sessionId,
+      userId: user.id,
+      rtId: user.rtId,
+      role: user.role,
+      ip: (req.ip || req.headers['x-forwarded-for'] || '').toString(),
+      userAgent: req.headers['user-agent'] || '',
+      expiresAt: sessionExpiresAt,
+      isRevoked: false
+    });
+    // Penunjuk ini membuat hanya satu sessionId terbaru yang dapat memakai akun,
+    // termasuk jika dua permintaan login datang hampir bersamaan.
+    await UserModel.updateOne(
+      { id: user.id, rtId: user.rtId },
+      { $set: { activeSessionId: sessionId } }
+    );
+
+    // 2. JWT token payload strictly uses userId, rtId, role, and sessionId
     const token = jwt.sign(
       { 
         id: user.id, 
         userId: user.id,
+        sessionId,
         username: user.username, 
         nik: user.nik,
         role: user.role, 
@@ -1992,11 +2149,25 @@ async function handleLogin(req: express.Request, res: express.Response, next: ex
         rtId: user.rtId 
       },
       JWT_SECRET,
-      { expiresIn: "365d" }
+      { expiresIn: "30d" }
     );
 
+    // 3. Set Secure HTTP-Only Cookie
+    res.cookie('guyub_session', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 30 * 24 * 60 * 60 * 1000
+    });
+
     const userJson = user.toObject();
+    delete userJson.password; // Never expose password hash
+    delete userJson.activeSessionId; // Internal pointer for one-device session enforcement
+    delete userJson.dokumenKk; // Never expose large private document in general login
+    delete userJson.dokumenKtp;
     userJson.token = token;
+    userJson.sessionId = sessionId;
     userJson.isVip = tenant?.isVip || tenant?.packageTier === 'VIP' || false;
     userJson.tenant = {
       rtId: user.rtId,
@@ -2034,13 +2205,39 @@ app.post("/api/ping", async (req, res) => {
   res.json({ success: true, isVip });
 });
 
-app.post("/api/logout", (req, res) => {
-  const { id } = req.body;
-  if (id) {
-    activeSessions.delete(id);
-    broadcastEvent('update', { type: 'online_status' });
+app.post(["/api/logout", "/api/auth/logout"], async (req, res) => {
+  try {
+    const userAuth = getAuthUser(req);
+    const sessionId = userAuth?.sessionId;
+    const userId = userAuth?.userId || userAuth?.id || req.body?.id;
+
+    if (sessionId) {
+      await connectDB();
+      await SessionModel.updateOne({ sessionId }, { $set: { isRevoked: true } });
+      if (userId) {
+        await UserModel.updateOne(
+          { id: String(userId), activeSessionId: String(sessionId) },
+          { $set: { activeSessionId: '' } }
+        );
+      }
+    }
+
+    if (userId) {
+      activeSessions.delete(userId);
+      broadcastEvent('update', { type: 'online_status' });
+    }
+
+    res.clearCookie('guyub_session', { path: '/' });
+    res.json({ success: true, message: "Logout berhasil" });
+  } catch (err: any) {
+    console.error('[Logout] Gagal mencabut sesi pada database:', err?.message || err);
+    res.clearCookie('guyub_session', { path: '/' });
+    return res.status(503).json({
+      success: false,
+      code: 'SESSION_REVOCATION_FAILED',
+      error: 'Perangkat ini keluar secara lokal, tetapi server belum dapat mengonfirmasi pencabutan sesi. Periksa koneksi database.'
+    });
   }
-  res.json({ success: true });
 });
 
 app.get("/api/notifications", async (req, res) => {
@@ -2119,23 +2316,31 @@ app.get("/api/stream", (req, res) => {
   });
 });
 
-app.put("/api/password", async (req, res) => {
+app.put(["/api/password", "/api/auth/change-password"], async (req, res) => {
   const { id, oldPassword, newPassword } = req.body;
   const rtId = getAuthorizedRtId(req);
   const userAuth = getAuthUser(req);
-  const targetId = userAuth?.id || id;
+  const targetId = userAuth?.userId || userAuth?.id || id;
+
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: "Password baru minimal 8 karakter." });
+  }
 
   const user = await UserModel.findOne({ id: targetId, rtId });
   if (user) {
-    if (!verifyPassword(oldPassword, user.password)) {
+    const isOldValid = await verifyPasswordAsync(oldPassword, user.password);
+    if (!isOldValid) {
       return res.status(400).json({ error: "Password lama tidak sesuai" });
     }
     const beforeObj = { password: "*****" };
     user.password = hashPassword(newPassword);
     await user.save();
+
+    // Security Hardening: Invalidate all existing sessions on password change
+    await SessionModel.updateMany({ userId: user.id }, { $set: { isRevoked: true } });
     
     await logAudit(rtId, user.nama, "PASSWORD_UPDATE", `Mengubah password akun`, beforeObj, { password: "*****" });
-    res.json({ message: "Password berhasil diganti" });
+    res.json({ message: "Password berhasil diganti. Sesi lain telah dinonaktifkan." });
   } else {
     res.status(404).json({ error: "User tidak ditemukan" });
   }
@@ -2260,12 +2465,15 @@ app.put("/api/profile", async (req, res) => {
       time: new Date().toISOString()
     });
     
+    const currentSessionId = String(userAuth?.sessionId || '');
     const token = jwt.sign(
-      { id: updatedUser.id, username: updatedUser.username, role: updatedUser.role, nama: updatedUser.nama, rtId: updatedUser.rtId },
+      { id: updatedUser.id, userId: updatedUser.id, sessionId: currentSessionId, username: updatedUser.username, role: updatedUser.role, nama: updatedUser.nama, rtId: updatedUser.rtId },
       JWT_SECRET,
-      { expiresIn: "365d" }
+      { expiresIn: "30d" }
     );
     const userJson = updatedUser.toObject();
+    delete userJson.activeSessionId;
+    userJson.sessionId = currentSessionId;
     userJson.token = token;
 
     res.json({ message: "Profile updated successfully", user: userJson, token });
@@ -2338,14 +2546,17 @@ app.post("/api/change-username", async (req, res) => {
 
     const savedUser = await user.save();
 
-    // Create fresh JWT token
+    // Buat JWT baru, tetapi pertahankan sesi server yang saat ini aktif.
+    const currentSessionId = String(userAuth?.sessionId || '');
     const token = jwt.sign(
-      { id: savedUser.id, username: savedUser.username, role: savedUser.role, nama: savedUser.nama, rtId: savedUser.rtId },
+      { id: savedUser.id, userId: savedUser.id, sessionId: currentSessionId, username: savedUser.username, role: savedUser.role, nama: savedUser.nama, rtId: savedUser.rtId },
       JWT_SECRET,
-      { expiresIn: "365d" }
+      { expiresIn: "30d" }
     );
 
     const userObj = savedUser.toObject();
+    delete userObj.activeSessionId;
+    userObj.sessionId = currentSessionId;
     userObj.token = token;
 
     await logAudit(user.rtId || rtId, user.nama, "USERNAME_UPDATE", `Mengubah username dari @${oldUsername} menjadi @${cleanUsername}`, { username: oldUsername }, { username: cleanUsername });
@@ -2374,17 +2585,32 @@ app.post("/api/change-username", async (req, res) => {
 });
 
 // GET current authenticated user profile
-app.get("/api/me", async (req, res) => {
+app.get(["/api/me", "/api/auth/me"], async (req, res) => {
   try {
     await connectDB();
     const rtId = getAuthorizedRtId(req);
     const userAuth = getAuthUser(req);
-    const requesterId = userAuth?.id || (req.headers['x-user-id'] as string) || '';
-    if (!requesterId) return res.status(401).json({ error: "Unauthorized" });
+    const requesterId = userAuth?.userId || userAuth?.id || '';
+    if (!requesterId) return res.status(401).json({ error: "Unauthorized: Silakan login terlebih dahulu" });
 
-    const user = await UserModel.findOne({ id: requesterId, rtId }).lean();
+    const query: any = { id: requesterId };
+    if (userAuth?.role !== 'developer') {
+      query.rtId = rtId;
+    }
+
+    const user = await UserModel.findOne(query).select('-password -dokumenKk -dokumenKtp').lean();
     if (!user) return res.status(404).json({ error: "User tidak ditemukan" });
 
+    const tenant = await TenantModel.findOne({ rtId: user.rtId }).lean();
+    (user as any).tenant = {
+      rtId: user.rtId,
+      namaRt: tenant?.namaRt || `RT ${user.rtId.replace('rt', '').padStart(2, '0')}`,
+      packageTier: tenant?.packageTier || 'Free',
+      statusLangganan: tenant?.statusLangganan !== false,
+      expiredAt: tenant?.expiredAt
+    };
+
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({ user });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -2465,9 +2691,10 @@ app.get("/api/warga-dokumen-kk", enforceRoles(['admin', 'sekretaris']), async (r
   const rtId = getAuthorizedRtId(req);
   try {
     await connectDB();
-    const users = await UserModel.find({ rtId, role: { $ne: 'developer' } }).select('+dokumenKk').lean();
+    const users = await UserModel.find({ rtId, role: { $ne: 'developer' } }).select('+dokumenKk +dokumenKtp').lean();
     const formatted = users.map((u: any) => {
-      const hasKk = Boolean(u.dokumenKk && String(u.dokumenKk).trim() !== '');
+      const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
+      const hasKtp = Boolean(u.hasKtp || (Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp && String(u.dokumenKtp).trim() !== '')));
       const resolvedNoKk = u.noKk || (hasKk ? extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama) : '');
       if (hasKk && !u.noKk && resolvedNoKk && u._id) {
         UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk } }).catch(() => {});
@@ -2476,6 +2703,7 @@ app.get("/api/warga-dokumen-kk", enforceRoles(['admin', 'sekretaris']), async (r
         ...u,
         noKk: resolvedNoKk || u.noKk || '',
         hasKk,
+        hasKtp,
         isOnline: activeSessions.has(u.id) && Date.now() - activeSessions.get(u.id)! < 15000
       };
     });
@@ -2483,6 +2711,245 @@ app.get("/api/warga-dokumen-kk", enforceRoles(['admin', 'sekretaris']), async (r
   } catch (err: any) {
     console.error("Gagal mengambil data dokumen KK:", err);
     res.status(500).json({ error: "Gagal mengambil data dokumen KK" });
+  }
+});
+
+// Identifikasi kategori wilayah KK secara batch. OCR hanya dijalankan untuk dokumen gambar yang belum bisa dikenali dari metadata.
+const KK_REGION_CATEGORIES = ['Kabupaten Tangerang', 'Kota Tangerang', 'Luar Kota Tangerang'] as const;
+
+async function recognizeKkAddressText(documentValue: unknown, worker: any): Promise<string> {
+  const doc = String(documentValue || '').trim();
+  if (!doc || !worker) return '';
+  if (doc.startsWith('data:image/svg+xml')) {
+    try {
+      const payload = doc.split(',')[1] || '';
+      return doc.includes(';base64,')
+        ? Buffer.from(payload, 'base64').toString('utf8')
+        : decodeURIComponent(payload);
+    } catch {
+      return '';
+    }
+  }
+  const match = doc.match(/^data:(image\/(?:jpeg|jpg|png|webp|bmp|tiff));base64,([\s\S]+)$/i);
+  if (!match) return '';
+  const imageBuffer = Buffer.from(match[2], 'base64');
+  // Batasi ukuran agar satu dokumen yang sangat besar tidak menghabiskan memori fungsi serverless.
+  if (imageBuffer.length === 0 || imageBuffer.length > 10 * 1024 * 1024) return '';
+  const recognized = await worker.recognize(imageBuffer);
+  return String(recognized?.data?.text || '');
+}
+
+app.post('/api/warga/identifikasi-semua-kk', enforceRoles(['admin', 'sekretaris']), async (req, res) => {
+  const rtId = getAuthorizedRtId(req);
+  const offset = Math.max(0, Number.parseInt(String(req.body?.offset ?? '0'), 10) || 0);
+  const limit = Math.max(1, Math.min(3, Number.parseInt(String(req.body?.limit ?? '2'), 10) || 2));
+
+  let ocrWorker: any = null;
+  let ocrInitAttempted = false;
+  let ocrFailures = 0;
+  try {
+    await connectDB();
+    const users = await UserModel.find({ rtId, role: { $ne: 'developer' } })
+      .select('id username nama alamat noKk role rtId kkCategory wilayahKk kkVerifiedByAdmin kkKecamatan kkKelurahan kkKabupatenKota kkProvinsi kkScanStatus kkScanConfidence kkScanSource alamatKk dokumenKk')
+      .select('+dokumenKk')
+      .sort({ id: 1 })
+      .lean();
+
+    const uploaded = users.filter((u: any) => Boolean(u.dokumenKk && String(u.dokumenKk).trim()));
+    const batch = uploaded.slice(offset, offset + limit);
+    const categories = {
+      'Kabupaten Tangerang': 0,
+      'Kota Tangerang': 0,
+      'Luar Kota Tangerang': 0
+    } as Record<string, number>;
+    let needsReview = 0;
+    const results: Array<{ id: string; nama: string; category: string; wilayahKk: string; alamatKk: string; kkKecamatan: string; noKk: string; kkScanStatus: string; needsReview: boolean; source?: string; skippedManual?: boolean }> = [];
+
+    for (const user of batch as any[]) {
+      const hasManualClassification = Boolean(
+        user.kkVerifiedByAdmin && KK_REGION_CATEGORIES.includes(user.kkCategory as any)
+      );
+      let region = resolveWargaKkRegion(user);
+      let ocrText = '';
+
+      if (!hasManualClassification) {
+        // Abaikan kategori hasil scan sebelumnya agar tombol scan dapat menghitung ulang dari bukti sumber.
+        const scanInput = {
+          ...user,
+          kkCategory: '',
+          wilayahKk: '',
+          kkVerifiedByAdmin: false,
+          kkScanStatus: '',
+          kkScanConfidence: ''
+        };
+        region = resolveWargaKkRegion(scanInput);
+
+        const docValue = String(user.dokumenKk || '').trim();
+        const isImage = /^data:image\/(?!svg\+xml)/i.test(docValue);
+        if (region.category === 'Belum Teridentifikasi' && isImage) {
+          try {
+            if (!ocrInitAttempted) {
+              ocrInitAttempted = true;
+              const Tesseract = await import('tesseract.js');
+              ocrWorker = await Tesseract.createWorker('ind+eng');
+            }
+            if (ocrWorker) {
+              ocrText = await recognizeKkAddressText(docValue, ocrWorker);
+              if (ocrText) region = resolveWargaKkRegion({ ...scanInput, kkOcrText: ocrText });
+            }
+          } catch (ocrError: any) {
+            ocrFailures++;
+            console.warn('[KK Region Scan] OCR gagal untuk satu dokumen; data ditandai untuk ditinjau.');
+          }
+        }
+
+        const update: Record<string, any> = {
+          kkCategory: region.category,
+          wilayahKk: region.category === 'Belum Teridentifikasi' ? '' : region.category,
+          kkVerifiedByAdmin: false,
+          kkScanStatus: region.category === 'Belum Teridentifikasi' ? 'needs_review' : 'automatic',
+          kkScanConfidence: region.confidence || 'low',
+          kkScanSource: region.source || 'insufficient-address-data',
+          kkRegionScannedAt: new Date()
+        };
+        if (region.kecamatan) update.kkKecamatan = region.kecamatan;
+        if (region.kelurahan) update.kkKelurahan = region.kelurahan;
+        if (region.kabupatenKota) update.kkKabupatenKota = region.kabupatenKota;
+        if (region.provinsi) update.kkProvinsi = region.provinsi;
+        if (region.alamat && region.alamat !== 'Alamat asal KK belum terbaca' && !user.alamatKk) {
+          update.alamatKk = region.alamat;
+        }
+        await UserModel.updateOne({ _id: user._id, rtId }, { $set: update });
+      }
+
+      if (KK_REGION_CATEGORIES.includes(region.category as any)) {
+        categories[region.category] = (categories[region.category] || 0) + 1;
+      } else {
+        needsReview++;
+      }
+      results.push({
+        id: String(user.id),
+        nama: String(user.nama || user.username || 'Warga'),
+        category: region.category,
+        wilayahKk: region.category,
+        alamatKk: String(user.alamatKk || region.alamat || ''),
+        kkKecamatan: String(user.kkKecamatan || region.kecamatan || ''),
+        noKk: String(user.noKk || ''),
+        kkScanStatus: hasManualClassification ? 'manual' : (region.category === 'Belum Teridentifikasi' ? 'needs_review' : 'automatic'),
+        needsReview: region.category === 'Belum Teridentifikasi',
+        source: region.source,
+        skippedManual: hasManualClassification
+      });
+    }
+
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.json({
+      success: true,
+      totalUploaded: uploaded.length,
+      offset,
+      limit,
+      batchScanned: batch.length,
+      totalScanned: batch.length,
+      nextOffset: offset + batch.length,
+      done: offset + batch.length >= uploaded.length,
+      categories,
+      needsReview,
+      ocrFailures,
+      results
+    });
+  } catch (error: any) {
+    console.error('[KK Region Scan] Gagal memproses batch identifikasi:', error?.message || error);
+    res.status(500).json({ error: 'Identifikasi KK gagal diproses. Periksa koneksi database dan Runtime Logs Vercel.' });
+  } finally {
+    if (ocrWorker) {
+      try { await ocrWorker.terminate(); } catch {}
+    }
+  }
+});
+
+// Pengurus RT menyimpan koreksi kategori alamat KK secara manual.
+app.put('/api/warga/:id/kategori-kk', enforceRoles(['admin']), async (req, res) => {
+  const rtId = getAuthorizedRtId(req);
+  const targetId = String(req.params.id || '');
+  const category = String(req.body?.kkCategory || '').trim();
+  if (!KK_REGION_CATEGORIES.includes(category as any)) {
+    return res.status(400).json({ error: 'Pilih salah satu kategori yang valid: Kabupaten Tangerang, Kota Tangerang, atau Luar Kota Tangerang.' });
+  }
+
+  try {
+    await connectDB();
+    const user = await UserModel.findOne({ id: targetId, rtId });
+    if (!user) return res.status(404).json({ error: 'Data warga tidak ditemukan di RT ini.' });
+
+    const actor = getAuthUser(req);
+    const beforeRegion = {
+      kkCategory: user.kkCategory || '',
+      kkKecamatan: user.kkKecamatan || '',
+      kkKelurahan: user.kkKelurahan || '',
+      kkKabupatenKota: user.kkKabupatenKota || '',
+      kkProvinsi: user.kkProvinsi || '',
+      alamatKk: user.alamatKk || ''
+    };
+    const submittedKabupatenKota = String(req.body?.kkKabupatenKota ?? '').trim();
+    const submittedProvinsi = String(req.body?.kkProvinsi ?? '').trim();
+    const defaultKabupatenKota = category === 'Kabupaten Tangerang'
+      ? 'Kabupaten Tangerang'
+      : category === 'Kota Tangerang'
+        ? 'Kota Tangerang'
+        : '';
+    const nextKabupatenKota = defaultKabupatenKota || submittedKabupatenKota;
+    const nextProvinsi = defaultKabupatenKota ? 'Banten' : submittedProvinsi;
+
+    if (category === 'Luar Kota Tangerang' && !nextKabupatenKota) {
+      return res.status(400).json({ error: 'Untuk kategori Luar Kota Tangerang, isi juga nama Kabupaten/Kota asal KK agar domisili tersimpan dengan benar.' });
+    }
+
+    user.kkCategory = category;
+    user.wilayahKk = category;
+    user.kkKecamatan = String(req.body?.kkKecamatan ?? user.kkKecamatan ?? '').trim();
+    user.kkKelurahan = String(req.body?.kkKelurahan ?? user.kkKelurahan ?? '').trim();
+    user.kkKabupatenKota = nextKabupatenKota;
+    user.kkProvinsi = nextProvinsi;
+    user.alamatKk = String(req.body?.alamatKk ?? user.alamatKk ?? '').trim();
+    user.kkVerifiedByAdmin = true;
+    user.kkScanStatus = 'manual';
+    user.kkScanConfidence = 'high';
+    user.kkScanSource = 'manual';
+    user.kkRegionReviewedAt = new Date();
+    user.kkRegionReviewedBy = actor?.nama || actor?.username || 'Ketua RT';
+    await user.save();
+
+    const afterRegion = {
+      kkCategory: user.kkCategory,
+      kkKecamatan: user.kkKecamatan,
+      kkKelurahan: user.kkKelurahan,
+      kkKabupatenKota: user.kkKabupatenKota,
+      kkProvinsi: user.kkProvinsi,
+      alamatKk: user.alamatKk
+    };
+    await logAudit(rtId, user.kkRegionReviewedBy, 'VERIFY_KK_REGION', `Memverifikasi kategori alamat KK ${user.nama}`, beforeRegion, afterRegion);
+    broadcastEvent('update', { type: 'users', rtId, action: 'kk-region', title: 'Kategori Alamat KK Diperbarui', message: `Kategori alamat KK ${user.nama} diperbarui oleh ${user.kkRegionReviewedBy}.`, updaterName: user.kkRegionReviewedBy, time: new Date().toISOString() });
+
+    return res.json({
+      success: true,
+      message: 'Kategori wilayah KK berhasil disimpan.',
+      user: {
+        id: user.id,
+        nama: user.nama,
+        kkCategory: user.kkCategory,
+        wilayahKk: user.wilayahKk,
+        kkKecamatan: user.kkKecamatan,
+        kkKelurahan: user.kkKelurahan,
+        kkKabupatenKota: user.kkKabupatenKota,
+        kkProvinsi: user.kkProvinsi,
+        alamatKk: user.alamatKk,
+        kkVerifiedByAdmin: user.kkVerifiedByAdmin,
+        kkScanStatus: user.kkScanStatus
+      }
+    });
+  } catch (error: any) {
+    console.error('[KK Region Manual Edit] Gagal menyimpan koreksi:', error?.message || error);
+    return res.status(500).json({ error: 'Gagal menyimpan kategori alamat KK. Periksa Runtime Logs Vercel.' });
   }
 });
 
@@ -3237,7 +3704,7 @@ app.get("/api/warga", async (req, res) => {
     ];
   }
 
-  let dbQuery = UserModel.find(query);
+  let dbQuery = UserModel.find(query).select('+dokumenKk +dokumenKtp');
   let sortedUsers: any[] = [];
   let total = 0;
 
@@ -3246,7 +3713,8 @@ app.get("/api/warga", async (req, res) => {
     const skip = (page - 1) * limit;
     const users = await dbQuery.skip(skip).limit(limit).lean();
     sortedUsers = users.map((u: any) => {
-      const hasKk = Boolean(u.dokumenKk && String(u.dokumenKk).trim() !== '');
+      const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
+      const hasKtp = Boolean(u.hasKtp || (Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp && String(u.dokumenKtp).trim() !== '')));
       const resolvedNoKk = u.noKk || (hasKk ? extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama) : '');
       if (hasKk && !u.noKk && resolvedNoKk && u._id) {
         UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk } }).catch(() => {});
@@ -3255,6 +3723,7 @@ app.get("/api/warga", async (req, res) => {
         ...u,
         noKk: resolvedNoKk || u.noKk || '',
         hasKk,
+        hasKtp,
         isOnline: activeSessions.has(u.id) && Date.now() - activeSessions.get(u.id)! < 15000
       };
     });
@@ -3278,7 +3747,8 @@ app.get("/api/warga", async (req, res) => {
     sortedUsers = users.map((u: any) => {
       const isOnline = activeSessions.has(u.id) && Date.now() - activeSessions.get(u.id)! < 15000;
       const isOwn = Boolean(requesterId && String(u.id) === String(requesterId));
-      const hasKk = Boolean(u.dokumenKk && String(u.dokumenKk).trim() !== '');
+      const hasKk = Boolean(u.hasKk || (u.dokumenKk && String(u.dokumenKk).trim() !== ''));
+      const hasKtp = Boolean(u.hasKtp || (Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp && String(u.dokumenKtp).trim() !== '')));
       const resolvedNoKk = u.noKk || (hasKk ? extractNoKkFromDocument(String(u.dokumenKk), u.username, u.nama) : '');
       if (hasKk && !u.noKk && resolvedNoKk && u._id) {
         UserModel.updateOne({ _id: u._id }, { $set: { noKk: resolvedNoKk } }).catch(() => {});
@@ -3299,7 +3769,7 @@ app.get("/api/warga", async (req, res) => {
           jenisKelamin: u.jenisKelamin,
           members: u.members || [],
           hasKk,
-          hasKtp: Array.isArray(u.dokumenKtp) ? u.dokumenKtp.length > 0 : Boolean(u.dokumenKtp),
+          hasKtp,
           isApproved: u.isApproved,
           rtId: u.rtId,
           isOnline
@@ -3309,6 +3779,7 @@ app.get("/api/warga", async (req, res) => {
         ...u,
         noKk: resolvedNoKk || u.noKk || '',
         hasKk,
+        hasKtp,
         isOnline
       };
     });
@@ -3932,10 +4403,24 @@ app.post("/api/iuran/remind", enforceRoles(['admin', 'pengurus', 'sekretaris', '
   }
 });
 
+async function checkRtVipStatus(rtId: string, userRole?: string): Promise<boolean> {
+  if (userRole === 'developer') return true;
+  const config = await RtConfigModel.findOne({ rtId }).lean();
+  return Boolean(config?.isVip || config?.packageTier === 'VIP');
+}
+
 // --- COMPATIBLE APP_DATA / MULTI-MODULE ENDPOINTS ---
 app.get("/api/data/:resource", async (req, res) => {
   const rtId = getAuthorizedRtId(req);
   const resource = req.params.resource;
+
+  if (['umkm', 'inventaris', 'notulen', 'voting'].includes(resource)) {
+    const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
+    const isVip = await checkRtVipStatus(rtId, userRole);
+    if (!isVip) {
+      return res.status(403).json({ error: `Fitur ${resource.toUpperCase()} hanya dapat diakses oleh RT berstatus VIP.` });
+    }
+  }
   
   const map: { [key: string]: mongoose.Model<any> } = {
     surat: SuratModel,
@@ -4061,6 +4546,14 @@ app.get("/api/data/:resource", async (req, res) => {
 app.post("/api/data/:resource", async (req, res) => {
   const rtId = getAuthorizedRtId(req);
   const resource = req.params.resource;
+
+  if (['umkm', 'inventaris', 'notulen', 'voting'].includes(resource)) {
+    const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
+    const isVip = await checkRtVipStatus(rtId, userRole);
+    if (!isVip) {
+      return res.status(403).json({ error: `Fitur ${resource.toUpperCase()} hanya dapat diakses oleh RT berstatus VIP.` });
+    }
+  }
   
   const map: { [key: string]: mongoose.Model<any> } = {
     surat: SuratModel,
@@ -4245,6 +4738,14 @@ app.put("/api/data/:resource/:id", async (req, res) => {
   const rtId = getAuthorizedRtId(req);
   const resource = req.params.resource;
 
+  if (['umkm', 'inventaris', 'notulen', 'voting'].includes(resource)) {
+    const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
+    const isVip = await checkRtVipStatus(rtId, userRole);
+    if (!isVip) {
+      return res.status(403).json({ error: `Fitur ${resource.toUpperCase()} hanya dapat diakses oleh RT berstatus VIP.` });
+    }
+  }
+
   const map: { [key: string]: mongoose.Model<any> } = {
     surat: SuratModel,
     laporan: LaporanModel,
@@ -4396,6 +4897,14 @@ app.put("/api/data/:resource/:id", async (req, res) => {
 app.delete("/api/data/:resource/:id", async (req, res) => {
   const rtId = getAuthorizedRtId(req);
   const resource = req.params.resource;
+
+  if (['umkm', 'inventaris', 'notulen', 'voting'].includes(resource)) {
+    const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
+    const isVip = await checkRtVipStatus(rtId, userRole);
+    if (!isVip) {
+      return res.status(403).json({ error: `Fitur ${resource.toUpperCase()} hanya dapat diakses oleh RT berstatus VIP.` });
+    }
+  }
 
   const map: { [key: string]: mongoose.Model<any> } = {
     surat: SuratModel,
@@ -4606,12 +5115,22 @@ app.post("/api/sedekah", async (req, res) => {
 // ==========================================
 app.get("/api/voting", async (req, res) => {
   const rtId = req.headers['x-rt-id'] as string || 'rt01';
+  const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
+  const isVip = await checkRtVipStatus(rtId, userRole);
+  if (!isVip) {
+    return res.status(403).json({ error: "Fitur Voting Warga hanya tersedia untuk RT berstatus VIP." });
+  }
   const data = await VotingModel.find({ rtId }).sort({ createdAt: -1 }).lean();
   res.json({ data });
 });
 
 app.post("/api/voting", enforceRoles(['admin']), async (req, res) => {
   const rtId = req.headers['x-rt-id'] as string || 'rt01';
+  const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
+  const isVip = await checkRtVipStatus(rtId, userRole);
+  if (!isVip) {
+    return res.status(403).json({ error: "Fitur Voting Warga hanya tersedia untuk RT berstatus VIP." });
+  }
   const { title, category, description, deadline, options, status, createdBy } = req.body;
 
   if (!title || !Array.isArray(options) || options.length < 2) {
@@ -5043,6 +5562,11 @@ app.post("/api/backup/restore", enforceRoles(['admin']), async (req, res) => {
 app.post("/api/gemini/action", async (req, res) => {
   const { action, payload } = req.body;
   const rtId = req.headers['x-rt-id'] as string || 'rt01';
+  const userRole = (req as any).user?.role || (req.headers['x-user-role'] as string);
+  const isVip = await checkRtVipStatus(rtId, userRole);
+  if (!isVip) {
+    return res.status(403).json({ error: "Fitur Smart RT AI hanya tersedia untuk RT berstatus VIP." });
+  }
 
   try {
     let prompt = "";
@@ -5402,28 +5926,70 @@ app.get(["/api/public/beranda-summary", "/api/dashboard/summary"], async (req, r
   }
 });
 
-// Status checking API
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", mode: "modular-tables", isDbConnected });
+// Status checking API. Does not rely on the global database middleware so this
+// endpoint can diagnose missing/unreachable MongoDB configuration instead of crashing.
+app.get("/api/health", async (_req, res) => {
+  const databaseConfigured = Boolean(process.env.MONGODB_URI?.trim());
+  const jwtSecretConfigured = isJwtSecretConfigured;
+  let database: 'connected' | 'not_configured' | 'unavailable' = 'unavailable';
+
+  if (!databaseConfigured) {
+    database = 'not_configured';
+  } else {
+    try {
+      await connectDB();
+      database = mongoose.connection.readyState === 1 ? 'connected' : 'unavailable';
+    } catch (error: any) {
+      console.error('[Health Check] MongoDB connection unavailable:', error?.message || error);
+      database = 'unavailable';
+    }
+  }
+
+  const ready = database === 'connected' && jwtSecretConfigured;
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  return res.status(ready ? 200 : 503).json({
+    status: ready ? 'ok' : 'degraded',
+    mode: 'modular-tables',
+    database,
+    isDbConnected: mongoose.connection.readyState === 1,
+    databaseConfigured,
+    jwtSecretConfigured,
+    ...(database === 'not_configured' ? { code: 'MONGODB_URI_MISSING' } : database === 'unavailable' ? { code: 'DATABASE_UNAVAILABLE' } : {}),
+    ...(!jwtSecretConfigured ? { jwtCode: 'JWT_SECRET_INVALID' } : {})
+  });
+});
+
+// These handlers are registered at module scope so they are also active on Vercel,
+// where startServer() is intentionally not called for serverless execution.
+app.use('/api/*', (req: express.Request, res: express.Response) => {
+  res.status(404).json({ code: 'API_ROUTE_NOT_FOUND', error: `API route ${req.originalUrl} not found` });
+});
+
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const requestPath = req.path || req.originalUrl || '';
+  const isApiRequest = requestPath.startsWith('/api/') || String(req.originalUrl || '').startsWith('/api');
+  if (isApiRequest) {
+    const requestId = crypto.randomUUID();
+    console.error('[API Error]', {
+      requestId,
+      method: req.method,
+      path: requestPath,
+      message: err?.message || String(err),
+      stack: err?.stack
+    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        code: 'INTERNAL_SERVER_ERROR',
+        error: 'Terjadi kesalahan internal pada server. Silakan periksa Runtime Logs Vercel.',
+        requestId
+      });
+    }
+  } else {
+    next(err);
+  }
 });
 
 export async function startServer(listen = true) {
-  // Global Error Handler for APIs
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.path.startsWith('/api/')) {
-      console.error("API Error:", err?.message || err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Internal Server Error" });
-      }
-    } else {
-      next(err);
-    }
-  });
-
-  // Catch-all 404 handler for API routes to prevent falling through to Vite/index.html
-  app.use('/api/*', (req: express.Request, res: express.Response) => {
-    res.status(404).json({ error: `API route ${req.originalUrl} not found` });
-  });
 
   const distPath = path.join(process.cwd(), 'dist');
   const distIndex = path.join(distPath, 'index.html');

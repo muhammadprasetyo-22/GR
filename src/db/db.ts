@@ -3,21 +3,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-function getMongoUri(): string {
-  return process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/guyubrukun';
-}
-
-function getDbName(): string | undefined {
-  if (process.env.MONGODB_DB_NAME) return process.env.MONGODB_DB_NAME;
-  const uri = getMongoUri();
-  // Check if URI already has a specific database path, e.g. /guyubrukun or /test
-  const match = uri.match(/mongodb(?:\+srv)?:\/\/[^/]+\/([a-zA-Z0-9_-]+)(?:\?|$)/);
-  if (match && match[1]) {
-    return match[1];
-  }
-  // If no db path in URI, default to 'guyubrukun'
-  return 'guyubrukun';
-}
+const rawMongoUri = process.env.MONGODB_URI?.trim();
+const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'guyubrukun';
+const isProductionRuntime = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
+// Keep module initialization safe so /api/health can report a missing URI clearly.
+// Production must never silently connect to a local MongoDB instance.
+const MONGODB_URI = rawMongoUri || (isProductionRuntime ? '' : 'mongodb://127.0.0.1:27017/guyubrukun');
 
 /**
  * Global interface for Mongoose cache on Node.js global object
@@ -44,6 +35,10 @@ if (!global.mongooseCache) {
  * Optimized MongoDB Connection with Connection Caching for Vercel Serverless
  */
 export async function connectDB(): Promise<typeof mongoose> {
+  if (!MONGODB_URI) {
+    throw new Error('[MongoDB Config] MONGODB_URI is required in Vercel/production Environment Variables.');
+  }
+
   // 1. If connection already active, reuse existing connection immediately
   if (cached.conn && mongoose.connection.readyState === 1) {
     return cached.conn;
@@ -51,10 +46,8 @@ export async function connectDB(): Promise<typeof mongoose> {
 
   // 2. If connection is already establishing, wait for the pending promise
   if (!cached.promise) {
-    const mongoUri = getMongoUri();
-    const targetDbName = getDbName();
     const opts: mongoose.ConnectOptions = {
-      ...(targetDbName ? { dbName: targetDbName } : {}),
+      dbName: MONGODB_DB_NAME,
       serverSelectionTimeoutMS: 8000,
       connectTimeoutMS: 10000,
       socketTimeoutMS: 45000,
@@ -65,8 +58,8 @@ export async function connectDB(): Promise<typeof mongoose> {
       autoIndex: process.env.NODE_ENV !== 'production', // Prevent blocking index creation in production cold starts
     };
 
-    cached.promise = mongoose.connect(mongoUri, opts).then((mongooseInstance) => {
-      const activeDb = mongooseInstance.connection.db?.databaseName || targetDbName;
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance) => {
+      const activeDb = mongooseInstance.connection.db?.databaseName || MONGODB_DB_NAME;
       console.log(`[MongoDB] Connected securely to target database '${activeDb}' with connection caching enabled.`);
       return mongooseInstance;
     }).catch((err) => {

@@ -2,7 +2,6 @@ import { apiFetch } from './apiInterceptor';
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { ReactSortable } from 'react-sortablejs';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
-import { VipComparisonModal } from './components/common/VipComparisonModal';
 
 const MobileDataWarga = React.lazy(() => import('./MobileDataWarga').then(m => ({ default: m.MobileDataWarga })));
 const MobileScanQR = React.lazy(() => import('./MobileScanQR').then(m => ({ default: m.MobileScanQR })));
@@ -1294,15 +1293,8 @@ const WebPengaturanPage = ({ user, onLogout }: { user: any, onLogout: () => void
     setSavingPass(false);
   };
 
-  const [showVipModal, setShowVipModal] = useState(false);
-
-  // Point 10: JSON Backup Download Handler (VIP Exclusive)
+  // Point 10: JSON Backup Download Handler
   const handleExportJson = async () => {
-    if (!user?.isVip && user?.role !== 'developer') {
-      setShowVipModal(true);
-      return;
-    }
-
     setExportingBackup(true);
     try {
       const selectedRt = localStorage.getItem('selected_rt') || 'rt01';
@@ -1318,12 +1310,7 @@ const WebPengaturanPage = ({ user, onLogout }: { user: any, onLogout: () => void
         a.remove();
         window.URL.revokeObjectURL(url);
       } else {
-        const errJson = await response.json().catch(() => ({}));
-        if (errJson.requiresVip) {
-          setShowVipModal(true);
-        } else {
-          alert(errJson.error || "Gagal mengekspor data.");
-        }
+        alert("Gagal mengekspor data.");
       }
     } catch (e) {
       console.error("Error backing up data:", e);
@@ -1562,19 +1549,10 @@ const WebPengaturanPage = ({ user, onLogout }: { user: any, onLogout: () => void
           </div>
           
           <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col justify-between relative overflow-hidden">
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                  </div>
-                  <button
-                    onClick={() => setShowVipModal(true)}
-                    className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 font-black text-[10px] flex items-center gap-1 hover:bg-amber-500/20 transition cursor-pointer"
-                  >
-                    <span className="text-amber-500">👑</span>
-                    <span>{user?.isVip ? 'VIP Terbuka' : 'Khusus VIP'}</span>
-                  </button>
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-4">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                 </div>
                 <h4 className="font-extrabold text-sm text-slate-800">Unduh Backup JSON Database</h4>
                 <p className="text-xs text-slate-400 mt-2 font-medium leading-relaxed">Backup utuh seluruh koleksi database RT ke penyimpanan lokal dalam format JSON yang kompatibel.</p>
@@ -1582,13 +1560,9 @@ const WebPengaturanPage = ({ user, onLogout }: { user: any, onLogout: () => void
               <button 
                 onClick={handleExportJson}
                 disabled={exportingBackup}
-                className={`w-full mt-6 py-3 border-none rounded-xl text-xs font-extrabold transition shadow-sm cursor-pointer flex items-center justify-center gap-1.5 ${
-                  user?.isVip || user?.role === 'developer'
-                    ? 'bg-slate-800 hover:bg-slate-900 text-white'
-                    : 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black'
-                }`}
+                className="w-full mt-6 py-3 bg-slate-800 hover:bg-slate-900 border-none text-white rounded-xl text-xs font-extrabold transition shadow-sm"
               >
-                {exportingBackup ? 'Memproses...' : user?.isVip || user?.role === 'developer' ? 'Ekspor JSON Database' : '🔒 Buka Fitur Backup (VIP)'}
+                {exportingBackup ? 'Memproses...' : 'Ekspor JSON Database'}
               </button>
             </div>
 
@@ -1727,17 +1701,6 @@ const WebPengaturanPage = ({ user, onLogout }: { user: any, onLogout: () => void
           </div>
         </div>
       )}
-
-      {/* MODAL PERBANDINGAN FITUR REGULER VS VIP */}
-      <VipComparisonModal
-        isOpen={showVipModal}
-        onClose={() => setShowVipModal(false)}
-        isVip={Boolean(user?.isVip)}
-        currentRt={user?.rtId ? `RT ${user.rtId.replace('rt', '').padStart(2, '0')}` : 'RT 01'}
-        onUpgradeClick={() => {
-          alert('Silakan hubungi Pengurus RT atau Developer Guyub Rukun untuk aktivasi paket VIP.');
-        }}
-      />
     </div>
   );
 };
@@ -5501,6 +5464,7 @@ export default function App() {
   });
   const [selectedRt, setSelectedRt] = useState<string>(() => localStorage.getItem('selected_rt') || '');
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
+  const [authNotice, setAuthNotice] = useState('');
   const [showSplash, setShowSplash] = useState(false);
   const [showAuthFlow, setShowAuthFlow] = useState(false);
   const [isMobile, setIsMobile] = useState(() => {
@@ -5518,6 +5482,24 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    const handleSessionInvalidated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ message?: string; preserveStoredSession?: boolean }>;
+      setAuthNotice(customEvent.detail?.message || 'Sesi Anda sudah tidak aktif. Silakan login kembali.');
+      setUser(null);
+      setAuthView('login');
+      setShowAuthFlow(true);
+      setShowSplash(false);
+      if (!customEvent.detail?.preserveStoredSession) {
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('token');
+      }
+    };
+    window.addEventListener('auth_session_invalidated', handleSessionInvalidated as EventListener);
+    return () => window.removeEventListener('auth_session_invalidated', handleSessionInvalidated as EventListener);
+  }, []);
+
   const handleUpdateUser = (updatedData: any) => {
     const newUser = { ...user, ...updatedData };
     setUser(newUser);
@@ -5525,6 +5507,7 @@ export default function App() {
   };
   
   const handleLogin = (userData: any) => {
+    setAuthNotice('');
     setUser(userData);
     localStorage.setItem('auth_user', JSON.stringify(userData));
     if (userData?.token) {
@@ -5548,13 +5531,63 @@ export default function App() {
     // Initial ping
     apiFetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: user.id }) }).catch(() => {});
 
-    // Heartbeat ping every 30 seconds
+    // Heartbeat ping every 15 seconds so revoked sessions are logged out promptly
     const interval = setInterval(() => {
       apiFetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: user.id }) }).catch(() => {});
-    }, 30000);
+    }, 15000);
 
     return () => {
       clearInterval(interval);
+    };
+  }, [user?.id]);
+
+  // Otomatis refresh data saat aplikasi dibuka kembali dari background / minimised / tab switched
+  useEffect(() => {
+    let lastRefreshTime = 0;
+
+    const triggerAutoRefresh = (reason: string) => {
+      const now = Date.now();
+      // Throttling 1.5s agar tidak terjadi request beruntun saat beberapa event fired bersamaan
+      if (now - lastRefreshTime < 1500) return;
+      lastRefreshTime = now;
+
+      // Trigger event global agar seluruh komponen/screen yang menampilkan data memperbarui state & re-fetch
+      window.dispatchEvent(new CustomEvent('app_data_update', { detail: { type: 'auto_refresh', reason } }));
+
+      // Ping server untuk memastikan koneksi & sesi tetap aktif
+      if (user?.id) {
+        apiFetch('/api/ping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user.id })
+        }).catch(() => {});
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        triggerAutoRefresh('visibilitychange');
+      }
+    };
+
+    const handleFocus = () => {
+      triggerAutoRefresh('focus');
+    };
+
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted || document.visibilityState === 'visible') {
+        triggerAutoRefresh('pageshow');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handlePageShow);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, [user?.id]);
 
@@ -5744,6 +5777,9 @@ export default function App() {
     }
     setUser(null);
     localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('token');
+    setAuthNotice('');
   };
 
   return (
@@ -5853,7 +5889,7 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <Login onLogin={handleLogin} onNavRegister={() => setAuthView('register')} />
+              <Login onLogin={handleLogin} onNavRegister={() => setAuthView('register')} initialNotice={authNotice} />
             </motion.div>
           ) : (
              <motion.div
