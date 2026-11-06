@@ -1,85 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /users/{uid} {
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
+      allow read, write:
+      if request.auth.uid == uid;
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
+      }
 
-    function isAdmin() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (request.auth.token.email == "muhammad.adjiprasetyo28@gmail.com" && request.auth.token.email_verified == true)
-      );
-    }
 
-    // Default deny catch-all
-    match /{document=**} {
-      allow read, write: if false;
-    }
+      match /admin/{doc} {
 
-    // Admins registry
-    match /admins/{adminId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
+      allow read, write:
+      if request.auth.token.role == "admin";
 
-    // Connection test document
-    match /test/{docId} {
-      allow read, write: if true;
-    }
-
-    // Users collection
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow update, delete: if isOwner(userId) || isAdmin();
-    }
-
-    // Notifications
-    match /notifications/{notificationId} {
-      allow read: if isSignedIn() && (resource.data.toUserId == request.auth.uid || isAdmin());
-      allow create, update, delete: if isSignedIn();
-    }
-
-    // Community collections
-    match /surat/{docId} {
-      allow read, write: if isSignedIn();
-    }
-    match /laporan/{docId} {
-      allow read, write: if isSignedIn();
-    }
-    match /acara/{docId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-    match /umkm/{docId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-    match /kas/{docId} {
-      allow read, write: if isSignedIn();
-    }
-    match /iuran/{docId} {
-      allow read, write: if isSignedIn();
-    }
-    match /darurat/{docId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-    match /media/{docId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-    match /voting/{docId} {
-      allow read, write: if isSignedIn();
-    }
-    match /inventaris/{docId} {
-      allow read, write: if isSignedIn();
+      }
     }
   }
 }

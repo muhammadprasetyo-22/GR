@@ -131,7 +131,7 @@ export function Login({ onLogin, onNavRegister }: any) {
             <label className="block text-xs font-semibold text-gray-700 mb-1">Password</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} onFocus={() => setIsFocusedPassword(true)} onBlur={() => setIsFocusedPassword(false)} required className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-teal-500" placeholder="Masukkan password"/>
           </div>
-          <button type="submit" disabled={loading} className="w-full h-12 flex items-center justify-center bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition-colors cursor-pointer">
+          <button type="submit" disabled={loading} className="w-full h-12 flex items-center justify-center bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition-colors">
             {loading ? (
               <div className="flex items-center justify-center space-x-1">
                 <motion.div className="w-2 h-2 bg-white rounded-full" animate={{ y: [0, -5, 0] }} transition={{ duration: 0.5, repeat: Infinity, delay: 0 }} />
@@ -141,8 +141,7 @@ export function Login({ onLogin, onNavRegister }: any) {
             ) : 'Masuk'}
           </button>
         </form>
-
-        <p className="mt-6 text-center text-xs text-gray-500">Belum punya akun? <button type="button" onClick={onNavRegister} className="text-teal-600 font-bold hover:underline cursor-pointer">Daftar</button></p>
+        <p className="mt-6 text-center text-xs text-gray-500">Belum punya akun? <button type="button" onClick={onNavRegister} className="text-teal-600 font-bold hover:underline">Daftar</button></p>
       </div>
   );
 }

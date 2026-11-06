@@ -11,7 +11,7 @@
         "noHp": { "type": "string" },
         "status": { "type": "string" },
         "umur": { "type": "number", "minimum": 0 },
-        "role": { "type": "string", "enum": ["warga", "admin", "bendahara", "sekretaris", "pengurus", "developer"] },
+        "role": { "type": "string", "enum": ["warga", "admin", "bendahara"] },
         "members": {
           "type": "array",
           "items": { "type": "object" }
