@@ -1715,7 +1715,7 @@ const MobileHeader = ({ notifications, onShowNotifications }: { notifications: a
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
       // Menggunakan sticky dan backdrop-blur agar terlihat modern saat halaman di-scroll
-      className="sticky top-0 z-40 flex items-center justify-between px-5 py-3.5 bg-white/85 backdrop-blur-xl border-b border-gray-100/50 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)]"
+      className="gr-mobile-header sticky top-0 z-40 flex items-center justify-between px-5 py-3.5 bg-white/85 backdrop-blur-xl border-b border-gray-100/50 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)]"
     >
       {/* Area Logo */}
       <motion.div 
@@ -1772,7 +1772,15 @@ const MobileProfile = ({ user, onClick }: { user: any; onClick?: () => void }) =
   <motion.section 
     whileTap={onClick ? { scale: 0.98 } : undefined}
     onClick={onClick}
-    className={`relative px-5 py-6 bg-gradient-to-br from-[#f0fbf8] to-[#e4f6ef] flex items-center justify-between gap-3 rounded-b-[2rem] mb-6 overflow-hidden border-b border-teal-100/50 shadow-sm ${onClick ? 'cursor-pointer' : ''}`}
+    role={onClick ? 'button' : undefined}
+    tabIndex={onClick ? 0 : undefined}
+    onKeyDown={onClick ? (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onClick();
+      }
+    } : undefined}
+    className={`gr-mobile-profile relative px-5 py-6 bg-gradient-to-br from-[#f0fbf8] to-[#e4f6ef] flex items-center justify-between gap-3 rounded-b-[2rem] mb-6 overflow-hidden border-b border-teal-100/50 shadow-sm ${onClick ? 'cursor-pointer' : ''}`}
   >
     <div className="absolute top-0 right-0 w-32 h-32 bg-teal-200/20 rounded-full translate-x-12 -translate-y-12 blur-2xl"></div>
     <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-200/30 rounded-full -translate-x-8 translate-y-8 blur-xl"></div>
@@ -1780,6 +1788,9 @@ const MobileProfile = ({ user, onClick }: { user: any; onClick?: () => void }) =
     <div className="flex-grow z-10">
       <h2 className="text-[22px] font-extrabold text-slate-800 tracking-tight" style={{ fontFamily: fontStyle }}>Halo, {shortName}!</h2>
       <p className="text-xs font-medium text-slate-500 mt-1">Warga RT {rtLabel}, {displayAlamat.length > 25 ? displayAlamat.substring(0, 25) + '...' : displayAlamat}</p>
+      <span className="gr-profile-link inline-flex items-center gap-1 mt-2.5 px-2.5 py-1 rounded-full bg-white/75 border border-teal-100 text-[10px] font-extrabold text-teal-700 shadow-sm">
+        Lihat profil <span aria-hidden="true">↗</span>
+      </span>
     </div>
     <div className="relative z-10 shrink-0">
       <div className="w-14 h-14 bg-slate-200 rounded-full flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm">
@@ -1881,7 +1892,7 @@ const MobileQuickActions = ({ onActionClick, visibleMenus = [] }: { onActionClic
   };
 
   return (
-    <section className="px-5 mb-8">
+    <section className="gr-quick-actions px-5 mb-8">
       <div className="flex justify-between items-center mb-3">
         <h3 className="font-extrabold text-gray-800 text-sm">Layanan Warga</h3>
         <div className="flex items-center gap-2">
@@ -1906,14 +1917,14 @@ const MobileQuickActions = ({ onActionClick, visibleMenus = [] }: { onActionClic
         variants={containerVariants} 
         initial="hidden" 
         animate="show" 
-        className="bg-white p-5 rounded-[2rem] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100"
+        className="gr-quick-actions-card bg-white p-5 rounded-[2rem] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100"
       >
         <ReactSortable 
           list={displayedActions} 
           setList={handleSetList}
           disabled={!isEditMode}
           animation={200}
-          className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-y-5 gap-x-3 sm:gap-4"
+          className="gr-quick-grid grid grid-cols-4 gap-y-5 gap-x-3"
         >
           {displayedActions.map((action, index) => (
             <motion.button 
@@ -1932,7 +1943,7 @@ const MobileQuickActions = ({ onActionClick, visibleMenus = [] }: { onActionClic
                   onActionClick(act.name);
                 }
               }} 
-              className={`flex flex-col items-center text-center gap-2.5 group outline-none ${isEditMode ? 'cursor-move' : ''}`}
+              className={`gr-quick-action flex flex-col items-center text-center gap-2.5 group outline-none ${isEditMode ? 'cursor-move' : ''}`}
             >
               {/* Box Ikon Modern */}
               <div className={`p-3.5 w-14 h-14 flex items-center justify-center rounded-[1.1rem] bg-gradient-to-br ${action.color} text-white shadow-md ${action.shadow} group-hover:shadow-lg transition-all relative overflow-hidden ${isEditMode ? 'animate-pulse ring-2 ring-orange-300 ring-offset-2' : ''}`}>
@@ -2311,8 +2322,9 @@ const MobileBottomNav = ({ activeTab, onTabChange, user }: { activeTab: string, 
     <motion.nav 
       initial={{ y: 50 }} 
       animate={{ y: 0 }} 
-      transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-      className="flex justify-around items-center px-2 py-2 pb-5 bg-white/92 backdrop-blur-2xl border-t border-slate-200/60 fixed bottom-0 left-0 right-0 z-50 w-full shadow-[0_-8px_32px_rgba(15,23,42,0.08)]"
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      // Efek glassmorphism tebal di bagian bawah
+      className="gr-mobile-bottom-nav flex justify-around items-center px-1 py-2 pb-6 bg-white/90 backdrop-blur-xl border-t border-gray-100/50 fixed bottom-0 left-0 right-0 z-50 w-full shadow-[0_-10px_40px_rgba(0,0,0,0.05)]"
     >
       {navItems.map((item) => {
         const isActive = activeTab === item.name;
@@ -2320,26 +2332,28 @@ const MobileBottomNav = ({ activeTab, onTabChange, user }: { activeTab: string, 
         return (
           <motion.button 
             key={item.name} 
-            whileTap={{ scale: 0.90 }}
+            whileTap={{ scale: 0.85 }}
             onClick={() => onTabChange(item.name)}
-            className={`relative flex flex-col items-center gap-1 transition-all py-1.5 px-2.5 rounded-2xl w-[68px] ${isActive ? 'text-teal-600' : 'text-slate-400 hover:text-slate-600'}`}
+            aria-current={isActive ? 'page' : undefined}
+            aria-pressed={isActive}
+            className={`gr-mobile-nav-item relative flex flex-col items-center gap-1 transition-all p-2 rounded-2xl w-[68px] ${isActive ? 'is-active text-teal-600' : 'text-slate-400 hover:text-slate-500'}`}
           >
             {/* Active Indicator Melayang (Framer Motion Layout Animation) */}
             {isActive && (
               <motion.div 
                 layoutId="bottomNavIndicator" 
-                className="absolute inset-0 bg-teal-500/10 border border-teal-500/20 rounded-2xl -z-10 shadow-xs" 
-                transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                className="absolute inset-0 bg-teal-50 rounded-2xl -z-10" 
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
               />
             )}
             
             <motion.div
-               animate={isActive ? { y: -2, scale: 1.1 } : { y: 0, scale: 1 }}
-               transition={{ type: "spring", stiffness: 350, damping: 25 }}
+               animate={isActive ? { y: -2 } : { y: 0 }}
+               transition={{ type: "spring", stiffness: 300 }}
             >
-               <item.icon className={`w-5.5 h-5.5 ${isActive ? 'drop-shadow-xs text-teal-600' : 'text-slate-400'}`} />
+               <item.icon className={`w-5.5 h-5.5 ${isActive ? 'drop-shadow-sm' : ''}`} />
             </motion.div>
-            <span className={`text-[9.5px] ${isActive ? 'font-black text-teal-700' : 'font-medium text-slate-500'} whitespace-nowrap`}>
+            <span className={`text-[9px] ${isActive ? 'font-extrabold' : 'font-semibold'} whitespace-nowrap`}>
               {item.name}
             </span>
           </motion.button>
@@ -2874,6 +2888,40 @@ const mobileNavItems = [
   { name: 'Profil', icon: icons.profil },
 ];
 
+const getKkCategoryDisplayLabel = (value: unknown): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return 'Belum teridentifikasi';
+  const normalized = raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (normalized.includes('belum')) return 'Belum teridentifikasi';
+  if (normalized.includes('luar kota') || normalized.includes('luar wilayah')) return 'Luar Kota Tangerang';
+  if (normalized.includes('tangerang selatan')) return 'Luar Kota Tangerang';
+  if (normalized.includes('kabupaten') && normalized.includes('tangerang')) return 'Kabupaten Tangerang';
+  if (normalized.includes('kota') && normalized.includes('tangerang')) return 'Kota Tangerang';
+  if (normalized === 'kabupaten tangerang') return 'Kabupaten Tangerang';
+  if (normalized === 'kota tangerang') return 'Kota Tangerang';
+  return raw;
+};
+
+const formatProfileDate = (value: unknown): string => {
+  if (!value) return '';
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }).format(date);
+};
+
+const getProfileAge = (ageValue: unknown, birthDate: unknown): string => {
+  const age = Number(ageValue);
+  if (Number.isFinite(age) && age > 0) return `${age} tahun`;
+  if (!birthDate) return '';
+  const birth = new Date(String(birthDate));
+  if (Number.isNaN(birth.getTime())) return '';
+  const now = new Date();
+  let years = now.getFullYear() - birth.getFullYear();
+  const beforeBirthday = now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate());
+  if (beforeBirthday) years -= 1;
+  return years >= 0 ? `${years} tahun` : '';
+};
+
 const MobileProfilPage = ({ user, onLogout, onUpdateUser }: { user: any; onLogout: () => void; onUpdateUser: (data: any) => void }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showQrZoom, setShowQrZoom] = useState(false);
@@ -2914,6 +2962,46 @@ const MobileProfilPage = ({ user, onLogout, onUpdateUser }: { user: any; onLogou
     hasChangedUsername: !!user?.hasChangedUsername
   });
 
+  // Profil memuat data keluarga/KK terbaru dari server tanpa mengambil file dokumen KK yang besar.
+  const [profileData, setProfileData] = useState<any>(user || {});
+  const [familyDataLoading, setFamilyDataLoading] = useState(false);
+  const [familyDataError, setFamilyDataError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+    setProfileData((previous: any) => ({ ...(previous || {}), ...(user || {}) }));
+    setFamilyDataError('');
+
+    if (!user?.id) return () => { isMounted = false; };
+
+    const loadLatestProfile = async () => {
+      setFamilyDataLoading(true);
+      try {
+        // Query unik menghindari cache GET 10 menit pada apiFetch.
+        const response = await apiFetch(`/api/me?profileRefresh=${Date.now()}`, {
+          method: 'GET',
+          cache: 'no-store'
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || `Gagal memuat data keluarga (HTTP ${response.status}).`);
+        }
+        if (payload?.user && String(payload.user.id) === String(user.id) && isMounted) {
+          setProfileData((previous: any) => ({ ...(previous || {}), ...payload.user }));
+        }
+      } catch (error: any) {
+        if (isMounted) {
+          setFamilyDataError(error?.message || 'Data keluarga belum dapat diperbarui dari server.');
+        }
+      } finally {
+        if (isMounted) setFamilyDataLoading(false);
+      }
+    };
+
+    loadLatestProfile();
+    return () => { isMounted = false; };
+  }, [user?.id, user?.token]);
+
   useEffect(() => {
     if (user) {
       setProfile(prev => ({
@@ -2941,6 +3029,28 @@ const MobileProfilPage = ({ user, onLogout, onUpdateUser }: { user: any; onLogou
       setProfile(prev => ({...prev, address: `Blok ${profileBlok} No. ${profileNomor}`}));
     }
   }, [profileBlok, profileNomor]);
+
+  const familyMembers = Array.isArray(profileData?.members) ? profileData.members : [];
+  const noKkDisplay = String(profileData?.noKk || '').trim();
+  const kkCategoryDisplay = getKkCategoryDisplayLabel(profileData?.kkCategory || profileData?.wilayahKk);
+  const kkKabupatenKotaDisplay = String(profileData?.kkKabupatenKota || (kkCategoryDisplay === 'Kabupaten Tangerang' || kkCategoryDisplay === 'Kota Tangerang' ? kkCategoryDisplay : '')).trim();
+  const kkProvinsiDisplay = String(profileData?.kkProvinsi || (kkCategoryDisplay === 'Kabupaten Tangerang' || kkCategoryDisplay === 'Kota Tangerang' ? 'Banten' : '')).trim();
+  const kkKecamatanDisplay = String(profileData?.kkKecamatan || '').trim();
+  const kkKelurahanDisplay = String(profileData?.kkKelurahan || '').trim();
+  const kkAlamatDisplay = String(profileData?.alamatKk || profileData?.kkAlamatLengkap || '').trim();
+  const kkAddressFallback = [
+    kkKelurahanDisplay ? `Kel. ${kkKelurahanDisplay}` : '',
+    kkKecamatanDisplay ? `Kec. ${kkKecamatanDisplay}` : '',
+    kkKabupatenKotaDisplay,
+    kkProvinsiDisplay
+  ].filter(Boolean).join(', ');
+  const kkCategoryClass = kkCategoryDisplay === 'Kabupaten Tangerang'
+    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    : kkCategoryDisplay === 'Kota Tangerang'
+      ? 'bg-sky-50 text-sky-700 border-sky-200'
+      : kkCategoryDisplay === 'Luar Kota Tangerang'
+        ? 'bg-violet-50 text-violet-700 border-violet-200'
+        : 'bg-amber-50 text-amber-700 border-amber-200';
 
   const calculateAge = (dob: string) => {
     if (!dob) return '';
@@ -3061,6 +3171,7 @@ const MobileProfilPage = ({ user, onLogout, onUpdateUser }: { user: any; onLogou
           token: data.token || user?.token
         };
         onUpdateUser(updated);
+        setProfileData((previous: any) => ({ ...(previous || {}), username: clean, hasChangedUsername: true }));
         setProfile(prev => ({ ...prev, username: clean, hasChangedUsername: true }));
         setUsernameSuccess(data.message || `Username berhasil diubah menjadi @${clean}!`);
         setSuccessMsg(`✅ Username berhasil diubah menjadi @${clean}!`);
@@ -3129,6 +3240,7 @@ const MobileProfilPage = ({ user, onLogout, onUpdateUser }: { user: any; onLogou
         setPhotoMeta(null);
         setShowPhotoPreviewModal(false);
         onUpdateUser(updatedUserData);
+        setProfileData((previous: any) => ({ ...(previous || {}), ...(data.user || {}), ...updatedUserData }));
         setIsEditing(false);
         setSuccessMsg('✅ Profil berhasil diperbarui!');
         setTimeout(() => setSuccessMsg(''), 3000);
@@ -3692,6 +3804,116 @@ const MobileProfilPage = ({ user, onLogout, onUpdateUser }: { user: any; onLogou
              Password
            </button>
         </div>
+
+        {/* Kartu Data Keluarga & Domisili KK */}
+        <section className="mb-6 bg-white rounded-3xl border border-teal-100 shadow-[0_8px_30px_rgba(13,148,136,0.07)] overflow-hidden" aria-labelledby="profile-family-heading">
+          <div className="p-4 sm:p-5 bg-gradient-to-r from-teal-50 via-white to-emerald-50 border-b border-teal-100 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <h3 id="profile-family-heading" className="text-sm sm:text-base font-black text-slate-900">Data Keluarga</h3>
+                <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5">Informasi Kartu Keluarga dan domisili asal</p>
+              </div>
+            </div>
+            <span className="shrink-0 px-2.5 py-1 rounded-full bg-white border border-teal-100 text-teal-700 text-[10px] font-extrabold">
+              {familyMembers.length + 1} Anggota
+            </span>
+          </div>
+
+          <div className="p-4 sm:p-5 space-y-4">
+            {familyDataError && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold" role="status">
+                {familyDataError} Data yang sudah tersedia tetap ditampilkan.
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3.5 min-w-0">
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Nomor Kartu Keluarga</p>
+                <p className="mt-1.5 font-mono text-base sm:text-lg font-black tracking-[0.08em] text-slate-900 break-all">
+                  {noKkDisplay || 'Belum tersedia'}
+                </p>
+                {!noKkDisplay && <p className="mt-1 text-[10px] text-slate-500">Nomor KK belum tercatat di profil.</p>}
+              </div>
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3.5 min-w-0">
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Kategori Domisili KK</p>
+                <span className={`inline-flex max-w-full mt-2 px-2.5 py-1.5 rounded-xl border text-[11px] font-extrabold leading-snug ${kkCategoryClass}`}>
+                  {kkCategoryDisplay}
+                </span>
+                {profileData?.kkVerifiedByAdmin && <p className="mt-1.5 text-[10px] font-bold text-emerald-700">✓ Telah diverifikasi RT</p>}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-100 p-3.5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5M9 21v-6h6v6"/></svg>
+                </span>
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Domisili pada KK</p>
+              </div>
+              <p className="text-sm font-bold text-slate-800 leading-relaxed break-words">
+                {kkAlamatDisplay || kkAddressFallback || 'Informasi domisili KK belum dilengkapi.'}
+              </p>
+              {(kkKelurahanDisplay || kkKecamatanDisplay || kkKabupatenKotaDisplay || kkProvinsiDisplay) && (
+                <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+                  {kkKelurahanDisplay && <div className="min-w-0"><p className="text-[9px] uppercase tracking-wide font-bold text-slate-400">Kelurahan / Desa</p><p className="text-xs font-bold text-slate-700 break-words">{kkKelurahanDisplay}</p></div>}
+                  {kkKecamatanDisplay && <div className="min-w-0"><p className="text-[9px] uppercase tracking-wide font-bold text-slate-400">Kecamatan</p><p className="text-xs font-bold text-slate-700 break-words">{kkKecamatanDisplay}</p></div>}
+                  {kkKabupatenKotaDisplay && <div className="min-w-0"><p className="text-[9px] uppercase tracking-wide font-bold text-slate-400">Kabupaten / Kota</p><p className="text-xs font-bold text-slate-700 break-words">{kkKabupatenKotaDisplay}</p></div>}
+                  {kkProvinsiDisplay && <div className="min-w-0"><p className="text-[9px] uppercase tracking-wide font-bold text-slate-400">Provinsi</p><p className="text-xs font-bold text-slate-700 break-words">{kkProvinsiDisplay}</p></div>}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <div>
+                  <h4 className="text-xs font-black text-slate-800">Susunan Anggota Keluarga</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Kepala keluarga dan anggota yang tercatat di KK</p>
+                </div>
+                {familyDataLoading && <span className="text-[9px] font-bold text-teal-600 animate-pulse">Memperbarui...</span>}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-teal-50/80 border border-teal-100 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-teal-600 text-white flex items-center justify-center text-xs font-black shrink-0">{String(profileData?.nama || profile.name || 'K').trim().charAt(0).toUpperCase()}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-extrabold text-slate-900 break-words">{profileData?.nama || profile.name}</p>
+                    <p className="text-[10px] text-teal-700 font-bold mt-0.5">Kepala Keluarga{profileData?.jenisKelamin ? ` · ${profileData.jenisKelamin}` : ''}</p>
+                  </div>
+                  <span className="shrink-0 px-2 py-1 rounded-lg bg-white/80 text-[9px] font-extrabold text-teal-700">KK Utama</span>
+                </div>
+
+                {familyMembers.map((member: any, index: number) => {
+                  const memberName = String(member?.name || member?.nama || `Anggota ${index + 1}`);
+                  const memberRole = String(member?.role || 'Anggota Keluarga');
+                  const memberAge = getProfileAge(member?.age ?? member?.umur, member?.tglLahir);
+                  const memberDate = formatProfileDate(member?.tglLahir);
+                  return (
+                    <div key={String(member?.id || member?._id || `${memberName}-${index}`)} className="flex items-start gap-3 p-3 rounded-2xl bg-white border border-slate-100 min-w-0">
+                      <div className="w-9 h-9 rounded-full bg-sky-50 text-sky-700 flex items-center justify-center text-xs font-black shrink-0">{memberName.trim().charAt(0).toUpperCase() || 'A'}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-extrabold text-slate-900 break-words">{memberName}</p>
+                        <p className="text-[10px] font-bold text-slate-500 mt-0.5">{memberRole}{member?.jenisKelamin ? ` · ${member.jenisKelamin}` : ''}</p>
+                        {(memberAge || memberDate) && <p className="text-[10px] text-slate-500 mt-1">{[memberAge, memberDate].filter(Boolean).join(' · ')}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {familyMembers.length === 0 && (
+                  <div className="p-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center">
+                    <p className="text-[11px] font-bold text-slate-600">Belum ada anggota keluarga tambahan.</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Saat ini hanya data kepala keluarga yang tercatat. Pengurus dapat melengkapi anggota keluarga melalui menu Data Warga.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* Kartu Informasi Lengkap */}
         <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden divide-y divide-slate-50">
@@ -5008,19 +5230,19 @@ function MainApp({ user: originalUser, onLogout, onUpdateUser }: { user: any; on
         </div>
       </div>
       ) : (
-      <div className="flex md:hidden relative z-20 w-full h-full bg-white flex-col overflow-hidden">
+      <div className="gr-mobile-app flex md:hidden relative z-20 w-full h-full bg-white flex-col overflow-hidden">
         {/* --- MOBILE USER VIEW --- */}
         <MobileHeader notifications={notifications} onShowNotifications={handleShowNotifications} />
-        <MobileProfile user={user} onClick={() => setActiveMobileTab('Profil')} />
+        {activeMobileTab === 'Beranda' && <MobileProfile user={user} onClick={() => setActiveMobileTab('Profil')} />}
         <div className="flex-grow overflow-hidden bg-white relative">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={activeMobileTab}
-              initial={activeMobileTab === 'Profil' ? { opacity: 0, y: 30, scale: 0.97 } : { opacity: 0, y: 12, scale: 0.98 }}
-              animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-              exit={activeMobileTab === 'Profil' ? { opacity: 0, y: 30, scale: 0.97 } : { opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="h-full overflow-y-auto pb-24 relative"
+              initial={activeMobileTab === 'Profil' ? { opacity: 0, y: "100%" } : { opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={activeMobileTab === 'Profil' ? { opacity: 0, y: "100%" } : { opacity: 0, x: -20 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="gr-mobile-page-scroll h-full overflow-y-auto pb-24 relative"
             >
               {activeMobileTab === 'Profil' ? (
                 <MobileProfilPage user={user} onLogout={onLogout} onUpdateUser={onUpdateUser} />

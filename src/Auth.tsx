@@ -81,12 +81,15 @@ export const CuteMascot = ({ isFocusedPassword }: { isFocusedPassword?: boolean 
   )
 }
 
-export function Login({ onLogin, onNavRegister }: any) {
+export function Login({ onLogin, onNavRegister, initialNotice }: any) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isFocusedPassword, setIsFocusedPassword] = useState(false);
+  useEffect(() => {
+    if (initialNotice) setError(String(initialNotice));
+  }, [initialNotice]);
   const currentRt = localStorage.getItem('selected_rt') || 'rt01';
   const displayRt = currentRt.toUpperCase().replace('RT', 'RT ');
 

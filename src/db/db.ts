@@ -3,12 +3,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const rawMongoUri = process.env.MONGODB_URI?.trim();
+const rawMongoUri = process.env.MONGODB_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'guyubrukun';
-const isProductionRuntime = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
-// Keep module initialization safe so /api/health can report a missing URI clearly.
-// Production must never silently connect to a local MongoDB instance.
-const MONGODB_URI = rawMongoUri || (isProductionRuntime ? '' : 'mongodb://127.0.0.1:27017/guyubrukun');
+
+// In production, reject unconfigured database to fail-fast with clear error
+if (process.env.NODE_ENV === 'production' && !rawMongoUri) {
+  throw new Error('[MongoDB Config Fatal] MONGODB_URI is required in production environment pointing to guyubrukun database.');
+}
+
+const MONGODB_URI = rawMongoUri || 'mongodb://127.0.0.1:27017/guyubrukun';
 
 /**
  * Global interface for Mongoose cache on Node.js global object
@@ -35,10 +38,6 @@ if (!global.mongooseCache) {
  * Optimized MongoDB Connection with Connection Caching for Vercel Serverless
  */
 export async function connectDB(): Promise<typeof mongoose> {
-  if (!MONGODB_URI) {
-    throw new Error('[MongoDB Config] MONGODB_URI is required in Vercel/production Environment Variables.');
-  }
-
   // 1. If connection already active, reuse existing connection immediately
   if (cached.conn && mongoose.connection.readyState === 1) {
     return cached.conn;
