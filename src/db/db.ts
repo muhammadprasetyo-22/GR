@@ -3,7 +3,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const rawMongoUri = process.env.MONGODB_URI?.trim();
+const rawMongoUri = (
+  process.env.MONGODB_URI ||
+  process.env.MONGO_URI ||
+  process.env.DATABASE_URL
+)?.trim();
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'guyubrukun';
 const isProductionRuntime = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
 // Keep module initialization safe so /api/health can report a missing URI clearly.
@@ -36,7 +40,7 @@ if (!global.mongooseCache) {
  */
 export async function connectDB(): Promise<typeof mongoose> {
   if (!MONGODB_URI) {
-    throw new Error('[MongoDB Config] MONGODB_URI is required in Vercel/production Environment Variables.');
+    throw new Error('[MongoDB Config] MONGODB_URI (atau MONGO_URI) belum diatur di Environment Variables Vercel.');
   }
 
   // 1. If connection already active, reuse existing connection immediately

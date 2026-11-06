@@ -1,4 +1,5 @@
 import { apiFetch } from './apiInterceptor';
+import './firebase';
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { ReactSortable } from 'react-sortablejs';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
